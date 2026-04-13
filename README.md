@@ -20,6 +20,17 @@
 
 ---
 
+## 🚀 Recent UI/UX Enhancements (Hackathon Updates)
+
+To deliver a truly completely modern and seamless feeling interface, we heavily overhauled the dashboard UI:
+
+1. **Lightweight Canvas 2D Neural Background:** Replaced the heavy, lag-inducing Three.js landing hero with a highly optimized, custom Canvas 2D neural network particle simulation. This ensures **butter-smooth 60FPS animations** without taxing the browser.
+2. **Aceternity UI Text Reveal Card:** Integrated a premium hover-reveal typography component onto the landing page. The card features a hidden message ("We intervene 15 days before.") that smoothly tracks the user's cursor with a cyan spotlight effect.
+3. **Global Responsive Fixes:** Swept the entire React dashboard (`LiveFlagging`, `Overview`, `ModelPredict`) to remove rigidly hardcoded pixel paddings. Replaced them with compliant `max-width: 100%` rules and responsive padding, eliminating horizontal scroll/overflow bugs on smaller laptop displays.
+4. **Cinematic Dark Glassmorphism:** Maintained our high-fidelity, financial surveillance aesthetic (`#0a0a0f` background, indigo/cyan accent typography).
+
+---
+
 ## 🎯 Problem Statement
 
 Indian banks lose **₹1.5 lakh crore** annually to loan defaults. Traditional systems detect delinquency *after* the damage — missed EMIs, damaged credit scores, legal recovery costs.
@@ -62,8 +73,8 @@ Indian banks lose **₹1.5 lakh crore** annually to loan defaults. Traditional s
 ### 1️⃣ Clone & Setup
 
 ```bash
-git clone https://github.com/Prashant-Mathwale/HackX.git
-cd HackX
+git clone https://github.com/Atharv-coder16/SFIT-Mumbai.git
+cd SFIT-Mumbai
 ```
 
 ### 2️⃣ Generate Data
@@ -98,6 +109,7 @@ npm run dev
 ```
 
 **Open** → [http://localhost:5173](http://localhost:5173) 🎉
+*(Or depending on Vite config, [http://localhost:3000](http://localhost:3000))*
 
 > 💡 **One-click launch (Windows):** Run `.\start.ps1` from the project root.
 
@@ -112,16 +124,6 @@ npm run dev
 | **Ensemble Meta-Learner** | Combines LightGBM + GRU | LogisticRegression on OOF predictions |
 | **Isolation Forest** | Anomaly detection | Flags sudden behavioral outliers (e.g. ATM spikes) |
 | **SHAP Explainer** | Feature attribution | Per-customer human-readable explanations |
-
-### Model Artifacts
-```
-backend/models/
-├── lgbm_model.pkl          # LightGBM classifier
-├── gru_model.pt            # GRU PyTorch model
-├── gru_scaler.pkl          # StandardScaler for GRU
-├── ensemble_meta.pkl       # Meta-learner
-└── isolation_forest.pkl    # Anomaly detector
-```
 
 ---
 
@@ -144,28 +146,13 @@ backend/models/
 
 ---
 
-## 🖥️ API Endpoints
+## 🎨 Dashboard & UI Architecture
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Health check + model status |
-| `POST` | `/auth/token` | JWT authentication |
-| `GET` | `/api/customers/at-risk` | Top at-risk customers |
-| `GET` | `/api/customers/{id}` | Full customer profile + ML risk |
-| `GET` | `/api/customers/{id}/history` | 52-week risk history |
-| `GET` | `/api/customers/{id}/explain` | SHAP explainability |
-| `POST` | `/api/interventions/trigger` | Trigger AI intervention |
-| `GET` | `/api/interventions/log` | Paginated intervention history |
-| `GET` | `/api/metrics/overview` | Dashboard KPI metrics |
+The premium glassmorphic dashboard has **4 tabs**, alongside the highly optimized Landing Page:
 
----
-
-## 🎨 Dashboard
-
-The premium glassmorphic dashboard has **4 tabs**:
-
-| Tab | Function |
+| Section | Description |
 |-----|----------|
+| **Landing Hero** | Custom-built `TextRevealCard` showcasing project foresight, surrounded by a lightweight `Canvas 2D Neural Background`. |
 | **Overview** | KPI cards, risk distribution, intervention stats |
 | **Live Flagging** | Real-time at-risk customer table with SHAP modal |
 | **Rules & SHAP** | Behavioral rule configuration + SHAP explanation viewer |
@@ -180,55 +167,22 @@ Praeventix/
 ├── frontend/                  # React + Vite Dashboard
 │   ├── src/
 │   │   ├── api/client.js      # API client
-│   │   ├── components/        # Overview, LiveFlagging, RulesShap, Outreach
+│   │   ├── components/        # LandingHero, TextRevealCard, Overview...
 │   │   ├── App.jsx            # Main app with tab navigation
-│   │   └── index.css          # Premium dark glassmorphic design
+│   │   └── index.css          # Premium dark glassmorphic design & global responsive layout
 │   ├── index.html
-│   ├── vite.config.js
 │   └── package.json
 │
 ├── backend/                   # FastAPI + ML Engine
-│   ├── api/                   # REST API (FastAPI routes, auth, schemas)
+│   ├── api/                   # REST API
 │   ├── agent/                 # LangGraph intervention agent
-│   ├── inference/             # ML prediction + SHAP explainability
-│   ├── training/              # Model training scripts
-│   ├── pipeline/              # Feature engineering
-│   ├── config/                # YAML configs (thresholds, model params)
-│   ├── data/                  # Generated CSV datasets
+│   ├── inference/             # ML prediction + SHAP
 │   ├── models/                # Trained model artifacts
-│   ├── tests/                 # Pytest test suite
-│   ├── generate_data.py       # Dataset generator
-│   └── requirements.txt       # Python dependencies
+│   └── requirements.txt       
 │
 ├── README.md
-├── ARCHITECTURE.md
 └── start.ps1                  # One-click demo launcher
 ```
-
----
-
-## ⚙️ Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LLM_MODE` | `mock` | LLM backend: `mock` / `anthropic` / `openai` |
-| `DATA_DIR` | `./data` | Path to CSV data directory |
-| Risk Tiers | `config/thresholds.yaml` | Monitor: 0.40 · Low: 0.55 · High: 0.70 |
-
----
-
-## 🧪 Testing
-
-```bash
-cd backend
-python -m pytest tests/ -v
-```
-
----
-
-## 👥 Team Markoblitz
-
-**Hack-o-Hire 2026**
 
 ---
 
