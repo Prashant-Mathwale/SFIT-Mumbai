@@ -293,12 +293,13 @@ data = load_data()
 _data_mtimes = _snapshot_mtimes()
 thresholds_config = load_thresholds()
 _sql_conn = None
+DB_FILE = os.path.join(DATA_DIR, "praeventix_cache.db")
 _transactions_mtime = 0.0
 _transactions_by_customer: Dict[str, pd.DataFrame] = {}
 
 
 def _load_customer_transactions(customer_id: str) -> pd.DataFrame:
-    """Load transaction rows for one customer using chunked CSV reads."""
+    """Load transaction rows for one customer from SQLite DB file cache."""
     global _transactions_mtime, _transactions_by_customer
     tx_path = os.path.join(DATA_DIR, "transactions.csv")
     mtime = _safe_mtime(tx_path)
@@ -309,21 +310,20 @@ def _load_customer_transactions(customer_id: str) -> pd.DataFrame:
     if customer_id in _transactions_by_customer:
         return _transactions_by_customer[customer_id]
 
-    if not os.path.exists(tx_path):
+    if _sql_conn is None:
         _transactions_by_customer[customer_id] = pd.DataFrame()
         return _transactions_by_customer[customer_id]
 
-    chunks = []
     try:
-        for chunk in pd.read_csv(tx_path, chunksize=50000):
-            matched = chunk[chunk["customer_id"] == customer_id]
-            if not matched.empty:
-                chunks.append(matched)
+        tx = pd.read_sql_query(
+            "SELECT txn_id, customer_id, date, txn_type, category, amount, channel, month "
+            "FROM transactions_cache WHERE customer_id = ?",
+            _sql_conn,
+            params=[customer_id],
+        )
     except Exception:
-        _transactions_by_customer[customer_id] = pd.DataFrame()
-        return _transactions_by_customer[customer_id]
+        tx = pd.DataFrame()
 
-    tx = pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
     if not tx.empty and "date" in tx.columns:
         tx["date"] = pd.to_datetime(tx["date"], errors="coerce")
         tx = tx.dropna(subset=["date"])
@@ -342,10 +342,18 @@ def ensure_data_fresh():
 
 
 def rebuild_sql_cache():
-    """Build an in-memory SQLite cache for fast filtering/search."""
+    """Build a file-based SQLite cache for fast filtering/search."""
     global _sql_conn
-    conn = sqlite3.connect(":memory:")
+    if _sql_conn is not None:
+        try:
+            _sql_conn.close()
+        except Exception:
+            pass
+    conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA temp_store=MEMORY")
 
     customers_df = data.get("customers", pd.DataFrame()).copy()
     weekly_df = data.get("weekly", pd.DataFrame()).copy()
@@ -401,6 +409,20 @@ def rebuild_sql_cache():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_scored_cid ON scored_cache(customer_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_scored_level ON scored_cache(risk_level)")
 
+    # Transactions table (chunked load from CSV to DB file).
+    tx_path = os.path.join(DATA_DIR, "transactions.csv")
+    if os.path.exists(tx_path):
+        conn.execute("DROP TABLE IF EXISTS transactions_cache")
+        first_chunk = True
+        for chunk in pd.read_csv(tx_path, chunksize=100000):
+            chunk.columns = [str(c) for c in chunk.columns]
+            chunk.to_sql("transactions_cache", conn, index=False, if_exists="replace" if first_chunk else "append")
+            first_chunk = False
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_cid ON transactions_cache(customer_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions_cache(date)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_cat ON transactions_cache(category)")
+
+    conn.commit()
     _sql_conn = conn
 
 
