@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import LandingHero from './components/LandingHero';
-import Overview from './components/Overview';
-import LiveFlagging from './components/LiveFlagging';
-import RulesShap from './components/RulesShap';
-import OutreachPanel from './components/OutreachPanel';
-import ModelPredict from './components/ModelPredict';
-import { login } from './api/client';
+import { login, getAtRiskCustomers } from './api/client';
+
+const Overview = lazy(() => import('./components/Overview'));
+const LiveFlagging = lazy(() => import('./components/LiveFlagging'));
+const RulesShap = lazy(() => import('./components/RulesShap'));
+const OutreachPanel = lazy(() => import('./components/OutreachPanel'));
+const ModelPredict = lazy(() => import('./components/ModelPredict'));
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('landing');
@@ -15,8 +16,34 @@ export default function App() {
   const [fadeKey, setFadeKey] = useState(0);
   const [badgeFlash, setBadgeFlash] = useState(false);
 
+  const [liveCount, setLiveCount] = useState('...');
+  const [liveCustomers, setLiveCustomers] = useState([]);
+
   useEffect(() => {
-    login().then(() => setLoggedIn(true)).catch(() => setLoggedIn(true));
+    if (activeTab === 'landing') return;
+
+    const refreshLiveFeed = () => {
+      getAtRiskCustomers(null, 0.40, 200)
+        .then(data => {
+          const rows = Array.isArray(data) ? data : [];
+          setLiveCustomers(rows);
+          setLiveCount(rows.filter(c => (c?.risk_score || 0) >= 0.70).length);
+        })
+        .catch(() => {
+          setLiveCustomers([]);
+          setLiveCount('!');
+        });
+    };
+
+    login().then(() => {
+      setLoggedIn(true);
+      refreshLiveFeed();
+    }).catch(() => {
+      setLoggedIn(true);
+      refreshLiveFeed();
+    });
+
+    const feedTimer = setInterval(refreshLiveFeed, 15000);
     const timer = setInterval(() => {
       const now = new Date();
       setClock(now.toLocaleTimeString('en-US', { hour12: false }));
@@ -31,11 +58,12 @@ export default function App() {
     }, 30000);
 
     return () => {
+      clearInterval(feedTimer);
       clearInterval(timer);
       clearInterval(flashTimer);
       window.removeEventListener('scroll', handleScroll);
     };
-  }, []);
+  }, [activeTab]);
 
   const handleTabChange = (tab) => {
     setFadeKey(k => k + 1);
@@ -46,7 +74,7 @@ export default function App() {
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'predict', label: 'AI Predict' },
-    { id: 'live', label: 'Live Flagging', liveDot: true, badge: '33', badgeColor: 'rgba(255,71,87,0.15)', badgeText: '#ff4757' },
+    { id: 'live', label: 'Live Flagging', liveDot: true, badge: liveCount, badgeColor: 'rgba(255,71,87,0.15)', badgeText: '#ff4757' },
     { id: 'rules', label: 'Rules & SHAP' },
     { id: 'outreach', label: 'Outreach', badge: '134', badgeColor: 'rgba(255,107,53,0.15)', badgeText: '#ff6b35' },
   ];
@@ -104,11 +132,13 @@ export default function App() {
 
       {/* PAGE CONTENT */}
       <div className="page-content" key={fadeKey}>
-        {activeTab === 'overview' && <Overview clock={clock} />}
-        {activeTab === 'predict' && <ModelPredict />}
-        {activeTab === 'live' && <LiveFlagging />}
-        {activeTab === 'rules' && <RulesShap />}
-        {activeTab === 'outreach' && <OutreachPanel />}
+        <Suspense fallback={<div style={{ padding: '32px 0', color: '#9999bb', fontFamily: 'DM Mono, monospace' }}>Loading module...</div>}>
+          {activeTab === 'overview' && <Overview clock={clock} />}
+          {activeTab === 'predict' && <ModelPredict seedCustomer={liveCustomers[0] || null} />}
+          {activeTab === 'live' && <LiveFlagging />}
+          {activeTab === 'rules' && <RulesShap defaultCustomerId={liveCustomers[0]?.customer_id || ''} />}
+          {activeTab === 'outreach' && <OutreachPanel seedCustomers={liveCustomers} />}
+        </Suspense>
       </div>
 
       {/* TOAST CONTAINER */}

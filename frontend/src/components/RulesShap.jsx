@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { explainCustomer } from '../api/client';
+import { explainCustomer, getRulesImpact, saveRulesConfig } from '../api/client';
+import Loader from './ui/Loader';
 
 const DEFAULT_RULES = [
   { id: 1, name: 'Salary credited 5+ days late', feature: 'salary_delay_days', threshold: 5, maxThreshold: 30, weight: 0.85, enabled: true },
@@ -153,13 +154,34 @@ async function generateShapPDF(explanation, customerId) {
 }
 
 
-export default function RulesShap() {
+export default function RulesShap({ defaultCustomerId = '' }) {
   const [rules, setRules] = useState(DEFAULT_RULES);
   const [customerId, setCustomerId] = useState('');
   const [explanation, setExplanation] = useState(null);
   const [shapLoading, setShapLoading] = useState(false);
   const [typedText, setTypedText] = useState('');
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [impactData, setImpactData] = useState([]);
+  const [saveStatus, setSaveStatus] = useState('idle');
+
+  useEffect(() => {
+    const activeRules = rules.filter(r => r.enabled);
+    if (activeRules.length === 0) {
+      setImpactData([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      getRulesImpact(activeRules).then(data => {
+        if (data && data.impacts) {
+          setImpactData(data.impacts.map(i => ({
+            name: i.feature.replace(/_/g, ' ').slice(0, 12),
+            affected: i.affected
+          })));
+        }
+      }).catch(() => {});
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [rules]);
 
   const toggleRule = (id) => setRules(r => r.map(rule => rule.id === id ? { ...rule, enabled: !rule.enabled } : rule));
   const updateThreshold = (id, val) => setRules(r => r.map(rule => rule.id === id ? { ...rule, threshold: Number(val) } : rule));
@@ -168,6 +190,17 @@ export default function RulesShap() {
   const addRule = () => {
     const newId = Math.max(...rules.map(r => r.id)) + 1;
     setRules([...rules, { id: newId, name: 'New Rule', feature: 'custom_feature', threshold: 0, maxThreshold: 100, weight: 0.5, enabled: false }]);
+  };
+
+  const handleSaveRules = async () => {
+    setSaveStatus('saving');
+    try {
+      await saveRulesConfig(rules);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2500);
+    } catch {
+      setSaveStatus('idle');
+    }
   };
 
   const handleExplain = async () => {
@@ -207,11 +240,22 @@ export default function RulesShap() {
   const shapDrivers = explanation?.all_drivers || explanation?.top_drivers || [];
   const maxShap = Math.max(...shapDrivers.map(s => Math.abs(s.contribution || 0)), 0.01);
 
-  // Impact preview data
-  const impactData = rules.filter(r => r.enabled).map(r => ({
-    name: r.feature.replace(/_/g, ' ').slice(0, 12),
-    affected: Math.floor(Math.random() * 30 + r.weight * 20)
-  }));
+  useEffect(() => {
+    if (!customerId && defaultCustomerId) {
+      setCustomerId(defaultCustomerId);
+    }
+  }, [defaultCustomerId, customerId]);
+
+  useEffect(() => {
+    if (!customerId) return;
+    handleExplain();
+    const timer = setInterval(() => {
+      explainCustomer(customerId).then((data) => {
+        setExplanation(data);
+      }).catch(() => {});
+    }, 25000);
+    return () => clearInterval(timer);
+  }, [customerId]);
 
   return (
     <div>
@@ -220,9 +264,9 @@ export default function RulesShap() {
           <h1>Rules & SHAP Configuration</h1>
           <p className="subtitle">Configure behavioral thresholds and inspect model explanations</p>
         </div>
-        <button className="btn-save">
+        <button className="btn-save" onClick={handleSaveRules}>
           <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
-          Save Configuration
+          {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved ✓' : 'Save Configuration'}
         </button>
       </div>
 
@@ -288,10 +332,8 @@ export default function RulesShap() {
           </div>
 
           {shapLoading && (
-            <div>
-              <div className="shimmer" style={{ width: '80%', height: 16, marginBottom: 12 }}></div>
-              <div className="shimmer" style={{ width: '60%', height: 16, marginBottom: 12 }}></div>
-              <div className="shimmer" style={{ width: '70%', height: 16 }}></div>
+            <div className="card" style={{ marginTop: 24, padding: 40 }}>
+              <Loader message="CALCULATING SHAP EXPLANATION..." />
             </div>
           )}
 

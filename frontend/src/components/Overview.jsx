@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { getOverviewMetrics, getInterventionLog, getModelInfo } from '../api/client';
+import { getOverviewMetrics, getInterventionLog, getModelInfo, getAtRiskCustomers } from '../api/client';
+import Loader from './ui/Loader';
 
 /* ═══════════════════════════════════════════
    OVERVIEW — Enterprise Dashboard v2.0
@@ -28,19 +29,17 @@ function AnimatedNumber({ target, duration = 1800, suffix = '', prefix = '', col
 }
 
 // ── Live Alert Ticker ──
-const TICKER_ALERTS = [
-  { severity: '#ff4757', text: '🔴 Aarav Reddy — Risk Score 89 — Immediate Intervention Required' },
-  { severity: '#ff6b35', text: '⚠️ Ananya Kapoor — Savings Depleted −53.25% — EMI at Risk' },
-  { severity: '#f59e0b', text: '🟡 Vihaan Nair — 3 Signals Detected — Rising Trend' },
-  { severity: '#ff4757', text: '🔴 Priya Sharma — Failed Auto-Debit × 3 — Escalation Triggered' },
-  { severity: '#ff6b35', text: '⚠️ Rohan Mehta — UPI to Lending Apps Detected — Monitoring' },
-  { severity: '#f59e0b', text: '🟡 Kavya Iyer — Credit Utilization 87% — Watch List' },
-  { severity: '#ff4757', text: '🔴 Amit Patel — Salary Delayed 12 Days — Critical' },
-  { severity: '#06ffa5', text: '✅ Deepa Nair — Restructured — Payment Resumed' },
-];
-
-function AlertTicker() {
-  const doubled = [...TICKER_ALERTS, ...TICKER_ALERTS];
+function AlertTicker({ atRiskData }) {
+  const alerts = atRiskData && atRiskData.length > 0
+    ? atRiskData.slice(0, 8).map(c => {
+      let severity = '#f59e0b'; // Medium
+      if (c.risk_level === 'HIGH' || c.anomaly_flag) severity = '#ff4757';
+      return { severity, text: `${c.anomaly_flag ? '🔴' : '⚠️'} ${c.name} — Risk ${Math.round(c.risk_score * 100)} — ${c.top_signal || 'Requires attention'}` };
+    })
+    : [
+      { severity: '#ff4757', text: '🔴 Loading live security feeds...' },
+    ];
+  const doubled = [...alerts, ...alerts];
   return (
     <div className="alert-ticker">
       <div className="alert-ticker-badge">
@@ -185,46 +184,49 @@ export default function Overview({ clock }) {
   const [metrics, setMetrics] = useState(null);
   const [interventions, setInterventions] = useState([]);
   const [modelInfoData, setModelInfoData] = useState(null);
+  const [atRisk, setAtRisk] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const refreshOverview = useCallback(() => {
     Promise.all([
       getOverviewMetrics().catch(() => null),
       getInterventionLog(1, 200).catch(() => []),
-      getModelInfo().catch(() => null)
-    ]).then(([m, logs, mInfo]) => {
-      setMetrics(m || { total_customers: 500, at_risk_count: 178, high_risk_count: 33, interventions_sent_today: 39, recovery_rate: 42.3, default_rate: 9.7 });
+      getModelInfo().catch(() => null),
+      getAtRiskCustomers(null, 0.40, 10).catch(() => [])
+    ]).then(([m, logs, mInfo, riskList]) => {
+      setMetrics(m || {});
       setInterventions(logs || []);
       setModelInfoData(mInfo);
+      setAtRisk(riskList || []);
       setLoading(false);
     });
   }, []);
 
-  // Risk velocity data (52 weeks)
-  const riskVelocityData = Array.from({ length: 52 }, (_, i) => ({
-    week: i + 1,
-    stress: Math.floor(15 + Math.sin(i / 6) * 8 + Math.random() * 5),
-  }));
-
-  // Donut data
-  const donutData = [
-    { name: 'Critical', value: 33, color: '#ff4757' },
-    { name: 'High', value: 134, color: '#ff6b35' },
-    { name: 'Medium', value: 11, color: '#f59e0b' },
-    { name: 'Low', value: 322, color: '#06ffa5' },
-  ];
+  useEffect(() => {
+    refreshOverview();
+    const timer = setInterval(refreshOverview, 15000);
+    return () => clearInterval(timer);
+  }, [refreshOverview]);
 
   const m = metrics || {};
+
+  // Risk velocity data (52 weeks) 
+  const riskVelocityData = m.risk_velocity || [];
+
+  // Donut data
+  const donutData = m.donut_data || [];
+
+  if (loading) return <Loader message="LOADING SECURE DASHBOARD..." />;
 
   return (
     <div style={{ animation: 'fadeSlideUp 600ms ease' }}>
       {/* Live Alert Ticker */}
-      <AlertTicker />
+      <AlertTicker atRiskData={atRisk} />
 
       <div className="page-header">
         <div>
           <h1>Risk Operations Center</h1>
-          <p className="subtitle">Real-time ensemble risk scoring across 500 monitored customers</p>
+          <p className="subtitle">Real-time ensemble risk scoring across {m.total_customers || 0} monitored customers</p>
         </div>
         <div className="page-header-right">
           <span className="clock">{clock}</span>
@@ -234,42 +236,42 @@ export default function Overview({ clock }) {
 
       {/* KPI Cards — 5 columns with glow effects */}
       <div className="kpi-grid">
-        {/* Hero Card: Avoided Loss */}
-        <div className="kpi-card hero-card" style={{ '--kpi-color': 'var(--accent-green)' }}>
+        {/* Hero Card: Total Portfolio */}
+        <div className="kpi-card" style={{ '--kpi-color': 'var(--accent-green)' }}>
           <div className="kpi-card-top">
             <div className="kpi-icon" style={{ background: 'rgba(6,255,165,0.1)' }}>
-              <svg width="24" height="24" fill="var(--accent-green)" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+              <svg width="24" height="24" fill="var(--accent-green)" viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z" /></svg>
             </div>
-            <span className="kpi-label">Avoided Loss</span>
+            <span className="kpi-label">Total Portfolio</span>
           </div>
-          <div className="kpi-value"><AnimatedNumber target={16.5} prefix="₹" suffix=" Cr" color="var(--accent-green)" decimals={1} duration={1200} /></div>
-          <div className="kpi-delta" style={{ color: 'var(--accent-green)' }}>↑ ₹2.1 Cr this quarter</div>
+          <div className="kpi-value"><AnimatedNumber target={m.total_portfolio || 0} prefix="₹" suffix=" Cr" color="var(--accent-green)" decimals={1} duration={1200} /></div>
+          <div className="kpi-delta" style={{ color: 'var(--accent-green)' }}>{m.portfolio_delta || "—"}</div>
         </div>
 
         {/* Monitored */}
         <div className="kpi-card" style={{ '--kpi-color': 'var(--accent-cyan)' }}>
           <div className="kpi-card-top">
             <div className="kpi-icon" style={{ background: 'rgba(0,212,255,0.1)' }}>
-              <svg width="24" height="24" fill="var(--accent-cyan)" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+              <svg width="24" height="24" fill="var(--accent-cyan)" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" /></svg>
             </div>
             <span className="kpi-label">Total Monitored</span>
           </div>
-          <div className="kpi-value"><AnimatedNumber target={m.total_customers || 500} color="var(--accent-cyan)" duration={1200} /></div>
-          <div className="kpi-delta" style={{ color: 'var(--text-muted)' }}>Live scoring active</div>
+          <div className="kpi-value"><AnimatedNumber target={m.total_customers || 0} color="var(--accent-cyan)" duration={1200} /></div>
+          <div className="kpi-delta" style={{ color: 'var(--text-muted)' }}>{m.at_risk_delta || "—"}</div>
         </div>
 
         {/* Critical — pulsing red border */}
         <div className="kpi-card critical-card" style={{ '--kpi-color': 'var(--accent-red)' }}>
           <div className="kpi-card-top">
             <div className="kpi-icon" style={{ background: 'rgba(255,71,87,0.1)' }}>
-              <svg width="24" height="24" fill="var(--accent-red)" viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+              <svg width="24" height="24" fill="var(--accent-red)" viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" /></svg>
             </div>
-            <span className="kpi-label">Critical Alerts</span>
+            <span className="kpi-label">Avoided Loss</span>
           </div>
-          <div className="kpi-value"><AnimatedNumber target={m.high_risk_count || 33} color="var(--accent-red)" duration={1200} /></div>
+          <div className="kpi-value"><AnimatedNumber target={m.avoided_loss_cr || 0} prefix="₹" suffix=" Cr" color="var(--accent-red)" decimals={1} duration={1200} /></div>
           <div className="kpi-delta" style={{ color: 'var(--accent-red)' }}>
             <span style={{ animation: 'dotBlink 1.2s infinite', marginRight: 4 }}>●</span>
-            Requires immediate action
+            Prevented via early intervention
           </div>
         </div>
 
@@ -277,24 +279,24 @@ export default function Overview({ clock }) {
         <div className="kpi-card" style={{ '--kpi-color': 'var(--accent-orange)' }}>
           <div className="kpi-card-top">
             <div className="kpi-icon" style={{ background: 'rgba(255,107,53,0.1)' }}>
-              <span style={{ fontSize: 20, animation: 'rotateOnce 1s ease-out' , display: 'inline-block' }}>🤖</span>
+              <span style={{ fontSize: 20, animation: 'rotateOnce 1s ease-out', display: 'inline-block' }}>🤖</span>
             </div>
             <span className="kpi-label">Auto Interventions</span>
           </div>
-          <div className="kpi-value"><AnimatedNumber target={m.interventions_sent_today || 39} color="var(--accent-orange)" duration={1200} /></div>
-          <div className="kpi-delta" style={{ color: 'var(--accent-orange)' }}>↑ 23% vs week 51</div>
+          <div className="kpi-value"><AnimatedNumber target={m.interventions_sent_today || 0} color="var(--accent-orange)" duration={1200} /></div>
+          <div className="kpi-delta" style={{ color: 'var(--accent-orange)' }}>{m.intervention_delta || "—"}</div>
         </div>
 
         {/* Recovery Rate */}
         <div className="kpi-card" style={{ '--kpi-color': 'var(--accent-green)' }}>
           <div className="kpi-card-top">
             <div className="kpi-icon" style={{ background: 'rgba(6,255,165,0.1)' }}>
-              <svg width="24" height="24" fill="var(--accent-green)" viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
+              <svg width="24" height="24" fill="var(--accent-green)" viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" /></svg>
             </div>
             <span className="kpi-label">Recovery Rate</span>
           </div>
-          <div className="kpi-value"><AnimatedNumber target={Math.round(m.recovery_rate || 42)} suffix="%" color="var(--accent-green)" duration={1200} /></div>
-          <div className="kpi-delta" style={{ color: 'var(--accent-green)' }}>↑ 4.2pp this month</div>
+          <div className="kpi-value"><AnimatedNumber target={Math.round(m.recovery_rate || 0)} suffix="%" color="var(--accent-green)" duration={1200} /></div>
+          <div className="kpi-delta" style={{ color: 'var(--accent-green)' }}>{m.recovery_delta || "—"}</div>
         </div>
       </div>
 
@@ -350,10 +352,9 @@ export default function Overview({ clock }) {
           <div className="card-header">
             <span className="card-title">Portfolio Exposure by Product</span>
           </div>
-          <PortfolioBar label="Home Loan" value={42} maxVal={100} color="#ff4757" delay={0} />
-          <PortfolioBar label="Credit Card" value={67} maxVal={100} color="#ff6b35" delay={150} />
-          <PortfolioBar label="Personal Loan" value={31} maxVal={100} color="#f59e0b" delay={300} />
-          <PortfolioBar label="Auto Loan" value={18} maxVal={100} color="#06ffa5" delay={450} />
+          {(m.portfolio_exposure && m.portfolio_exposure.length > 0 ? m.portfolio_exposure : []).map((p, i) => (
+            <PortfolioBar key={i} label={p.label} value={p.value} maxVal={100} color={p.color} delay={i * 150} />
+          ))}
         </div>
 
         {/* Model Performance */}
@@ -365,25 +366,19 @@ export default function Overview({ clock }) {
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {[
-              { name: 'LightGBM AUC', value: 82, color: '#00d4ff' },
-              { name: 'GRU AUC', value: 77, color: '#7c3aed' },
-              { name: 'Ensemble AUC', value: 84, color: '#06ffa5' },
-              { name: 'Recall', value: 87, color: '#ff6b35' },
-              { name: 'F2-Score', value: 79, color: '#e0e0f0' },
-            ].map((m, i) => (
+            {(m.model_performance && m.model_performance.length > 0 ? m.model_performance : []).map((perf, i) => (
               <div key={i}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#9999bb' }}>{m.name}</span>
-                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 14, fontWeight: 600, color: m.color }}>
-                    <AnimatedNumber target={m.value} suffix="%" color={m.color} duration={1200} />
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#9999bb' }}>{perf.name}</span>
+                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 14, fontWeight: 600, color: perf.color }}>
+                    <AnimatedNumber target={perf.value} suffix="%" color={perf.color} duration={1200} />
                   </span>
                 </div>
                 <div style={{ height: 4, borderRadius: 100, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
                   <div style={{
-                    height: '100%', borderRadius: 100, background: m.color,
-                    width: `${m.value}%`, transition: 'width 1.2s ease-out',
-                    boxShadow: `0 0 8px ${m.color}40`,
+                    height: '100%', borderRadius: 100, background: perf.color,
+                    width: `${perf.value}%`, transition: 'width 1.2s ease-out',
+                    boxShadow: `0 0 8px ${perf.color}40`,
                   }} />
                 </div>
               </div>

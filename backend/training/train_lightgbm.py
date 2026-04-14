@@ -51,6 +51,12 @@ def train_lightgbm():
 
     # ── Load Data ──
     df = pd.read_csv(os.path.join(ROOT, "data", "weekly_behavioral_features.csv"))
+    
+    # Explicit Segment Mapping (Bank-Grade Consistency)
+    SEGMENT_MAP = {"salaried": 0, "self-employed": 1, "farmer": 2, "freelancer": 3, "student": 4, "other": 5}
+    if "customer_segment" in df.columns:
+        df["customer_segment"] = df["customer_segment"].map(SEGMENT_MAP).fillna(5).astype(int)
+    
     print(f"  Loaded {len(df)} rows, {df[TARGET].mean():.1%} positive rate")
 
     # ── Temporal Split: weeks 1-40 train, 41-52 test ──

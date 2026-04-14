@@ -23,9 +23,11 @@ export async function getHealth() {
   return res.data;
 }
 
-export async function getAtRiskCustomers(weekNumber, threshold = 0.40, limit = 50) {
+export async function getAtRiskCustomers(weekNumber, threshold = 0.40, limit = 50, riskLevel = null, search = null) {
   const params = { threshold, limit };
   if (weekNumber) params.week_number = weekNumber;
+  if (riskLevel) params.risk_level = riskLevel;
+  if (search && search.trim()) params.search = search.trim();
   const res = await api.get('/api/customers/at-risk', { params });
   return res.data;
 }
@@ -50,6 +52,21 @@ export async function triggerIntervention(customerId, weekNumber = 52) {
     customer_id: customerId,
     week_number: weekNumber
   });
+  return res.data;
+}
+
+export async function recordIntervention(recordData) {
+  const res = await api.post('/api/interventions/record', recordData);
+  return res.data;
+}
+
+export async function getCustomerTimeline(customerId) {
+  const res = await api.get(`/api/customers/${customerId}/timeline`);
+  return res.data;
+}
+
+export async function getAbilityWillingness(customerId) {
+  const res = await api.get(`/api/customers/${customerId}/ability-willingness`);
   return res.data;
 }
 
@@ -79,6 +96,23 @@ export async function getModelInfo() {
 
 export async function predictBatch(loans) {
   const res = await api.post('/api/predict/batch', loans);
+  return res.data;
+}
+
+// ── Landing Page Metrics ──
+export async function getLandingMetrics() {
+  const res = await api.get('/api/metrics/landing');
+  return res.data;
+}
+
+// ── Rules Engine ──
+export async function getRulesImpact(rules) {
+  const res = await api.post('/api/rules/impact', rules);
+  return res.data;
+}
+
+export async function saveRulesConfig(rules) {
+  const res = await api.post('/api/rules/save', rules);
   return res.data;
 }
 

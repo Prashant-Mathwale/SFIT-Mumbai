@@ -1,10 +1,14 @@
 """
-Generate all 4 CSV datasets for the Pre-Delinquency Intervention Engine.
-Run this once to create:
-  data/customers.csv
-  data/transactions.csv
-  data/weekly_behavioral_features.csv
-  data/intervention_log.csv
+Generate all 4 CSV datasets for the Praeventix Bank-Grade EWS.
+============================================================
+Implements:
+1. 🌾 Farmer (Climate/Harvest Seasonality)
+2. 🎓 Student (Allowance Logic)
+3. 🎨 Freelancer (Project-based irregular income)
+4. 💊 Medical Shock (One-time anomaly detection)
+5. 🎉 Festival Spike (Seasonal spending normalization)
+6. 💵 Cash User (Alternative digital footprint)
+7. 🚜 Decision Intelligence (Context-aware risk signals)
 """
 
 import random
@@ -12,325 +16,274 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 import os
+import sys
 
+sys.stdout.reconfigure(encoding='utf-8')
+
+# Reproducibility
 random.seed(42)
 np.random.seed(42)
 
 DATA_DIR = "data"
 os.makedirs(DATA_DIR, exist_ok=True)
 
-# ─────────────────────────────────────────────────
-# FILE 1: customers.csv  (2,000 rows)
-# ─────────────────────────────────────────────────
+# ── DOMAIN CONSTANTS & MAPPING ──
+SEGMENT_MAP = {
+    "salaried": 0,
+    "self-employed": 1,
+    "farmer": 2,
+    "freelancer": 3,
+    "student": 4,
+    "other": 5
+}
 
-CITIES = ["Mumbai", "Delhi", "Bangalore", "Chennai", "Hyderabad", "Pune", "Kolkata",
-          "Ahmedabad", "Jaipur", "Lucknow", "Nagpur", "Indore", "Bhopal", "Coimbatore",
-          "Kochi", "Surat", "Vadodara", "Chandigarh", "Noida", "Gurgaon"]
-
-OCCUPATIONS = ["Salaried", "Self-Employed", "Business Owner", "Freelancer",
+CITIES = ["Mumbai", "Delhi", "Bangalore", "Chennai", "Hyderabad", "Pune", "Kolkata", "Ahmedabad", "Jaipur", "Lucknow"]
+OCCUPATIONS = ["Salaried", "Self-Employed", "Business Owner", "Freelancer", "Farmer", "Student",
                "Government Employee", "Teacher", "Healthcare Worker", "IT Professional",
                "Sales Executive", "Retired"]
+PRODUCT_TYPES = ["Personal Loan", "Home Loan", "Auto Loan", "Credit Card", "Business Loan", "Education Loan"]
 
-PRODUCT_TYPES = ["Personal Loan", "Home Loan", "Auto Loan", "Credit Card",
-                 "Business Loan", "Education Loan"]
+FIRST_NAMES = ["Rajesh", "Priya", "Amit", "Sunita", "Vikram", "Anita", "Suresh", "Kavita", "Manoj", "Neha",
+               "Arun", "Deepa", "Rahul", "Meena", "Sanjay", "Pooja", "Ravi", "Lakshmi", "Krishna", "Divya"]
+LAST_NAMES = ["Sharma", "Patel", "Kumar", "Singh", "Verma", "Gupta", "Reddy", "Nair", "Desai", "Mehta",
+              "Joshi", "Rao", "Das", "Mishra", "Iyer", "Pillai", "Agarwal", "Choudhury", "Bhat", "Menon"]
 
-FIRST_NAMES = ["Rajesh", "Priya", "Amit", "Sunita", "Vikram", "Anita", "Suresh", "Kavita",
-               "Manoj", "Neha", "Arun", "Deepa", "Rahul", "Meena", "Sanjay", "Pooja",
-               "Ravi", "Lakshmi", "Krishna", "Divya", "Ajay", "Swati", "Ramesh", "Geeta",
-               "Nitin", "Asha", "Mohan", "Rekha", "Vinod", "Shanti", "Prakash", "Usha",
-               "Sunil", "Sarita", "Ashok", "Kamla", "Dinesh", "Padma", "Gopal", "Nirmala"]
-
-LAST_NAMES = ["Sharma", "Patel", "Kumar", "Singh", "Verma", "Gupta", "Reddy", "Nair",
-              "Desai", "Mehta", "Joshi", "Rao", "Das", "Mishra", "Iyer", "Pillai",
-              "Agarwal", "Choudhury", "Bhat", "Menon", "Saxena", "Tiwari", "Pandey",
-              "Kapoor", "Banerjee", "Mukherjee", "Sinha", "Yadav", "Malhotra", "Thakur"]
-
+# ─────────────────────────────────────────────────
+# PHASE 1: Generate Customers (5,000)
+# ─────────────────────────────────────────────────
 customers = []
-for i in range(2000):
+for i in range(5000):
     cid = f"CUS-{10001 + i}"
     name = f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
-    age = random.randint(22, 65)
+    age = random.randint(18, 70)
     city = random.choice(CITIES)
     occupation = random.choice(OCCUPATIONS)
-    monthly_salary = int(np.random.lognormal(mean=10.5, sigma=0.5)) // 1000 * 1000
-    monthly_salary = max(15000, min(monthly_salary, 300000))
-    credit_score = int(np.clip(np.random.normal(700, 80), 300, 900))
-    loan_amount = random.choice([0] * 2 + [int(monthly_salary * random.uniform(12, 60))] * 8)
-    emi_amount = int(loan_amount / random.uniform(12, 48)) if loan_amount > 0 else 0
-    credit_limit = int(monthly_salary * random.uniform(1.5, 4))
-    savings_balance_initial = int(monthly_salary * random.uniform(0.5, 6))
-    product_type = random.choice(PRODUCT_TYPES)
-    account_open_days = random.randint(90, 2000)
-    customers.append([cid, name, age, city, occupation, monthly_salary, credit_score,
-                      loan_amount, emi_amount, credit_limit, savings_balance_initial,
-                      product_type, account_open_days])
+    
+    # ── Segment Assignment ──
+    if occupation in ["Salaried", "Government Employee", "IT Professional", "Sales Executive", "Teacher", "Healthcare Worker"]:
+        segment = "salaried"
+    elif occupation in ["Self-Employed", "Business Owner"]:
+        segment = "self-employed"
+    elif occupation == "Farmer":
+        segment = "farmer"
+    elif occupation == "Freelancer":
+        segment = "freelancer"
+    elif occupation == "Student":
+        segment = "student"
+    else:
+        segment = "other"
+
+    # ── Income Modeling ──
+    base_income = int(np.random.lognormal(mean=10.6, sigma=0.45)) // 1000 * 1000
+    if segment == "student":
+        base_income = random.randint(8000, 25000) # Allowance
+    elif segment == "farmer":
+        base_income = random.randint(15000, 60000) # Seasonal avg
+    
+    base_income = max(8000, min(base_income, 450000))
+    
+    # Income Segments
+    if base_income < 35000:
+        income_tier = "low"
+    elif base_income > 120000:
+        income_tier = "high"
+    else:
+        income_tier = "medium"
+    
+    # Credit Score (Student/Freelancer bias)
+    cs_mean = 720 if segment == "salaried" else 680
+    credit_score = int(np.clip(np.random.normal(cs_mean, 80), 300, 900))
+    if segment == "student": credit_score = random.randint(600, 740)
+    
+    # Loan & EMI Logic
+    has_loan = random.random() < 0.8
+    loan_amt = int(base_income * random.uniform(5, 50)) if has_loan else 0
+    emi_amt = min(int(loan_amt / random.uniform(12, 60)), int(base_income * 0.7)) if has_loan else 0
+    
+    customers.append([cid, name, age, city, occupation, segment, income_tier, base_income, credit_score,
+                      loan_amt, emi_amt, random.randint(50000, 500000), # Credit Limit
+                      int(base_income * random.uniform(0.5, 10)), # Init Savings
+                      random.choice(PRODUCT_TYPES), random.randint(60, 3000)])
 
 customers_df = pd.DataFrame(customers, columns=[
-    "customer_id", "name", "age", "city", "occupation", "monthly_salary",
+    "customer_id", "name", "age", "city", "occupation", "customer_segment", "income_segment", "monthly_salary",
     "credit_score", "loan_amount", "emi_amount", "credit_limit",
     "savings_balance_initial", "product_type", "account_open_days"
 ])
 customers_df.to_csv(f"{DATA_DIR}/customers.csv", index=False)
-print(f"✅ customers.csv: {len(customers_df)} rows")
+print(f"✅ customers.csv: {len(customers_df)} rows generated.")
 
 # ─────────────────────────────────────────────────
-# FILE 2: transactions.csv  (~187,000 rows)
+# PHASE 2: Generate Transactions (~200k)
 # ─────────────────────────────────────────────────
 
-CATEGORIES = {
-    "SALARY":           ("CREDIT", (0.95, 1.05)),
-    "EMI_PAYMENT":      ("DEBIT",  (0.98, 1.02)),
-    "ATM_WITHDRAWAL":   ("DEBIT",  (0.3, 0.8)),
-    "DINING":           ("DEBIT",  (0.05, 0.15)),
-    "UPI_LENDING_APP":  ("DEBIT",  (0.1, 0.4)),
-    "GAMBLING_LOTTERY":  ("DEBIT",  (0.02, 0.1)),
-    "ELECTRICITY":      ("DEBIT",  (0.03, 0.08)),
-    "WATER":            ("DEBIT",  (0.01, 0.03)),
-    "GAS":              ("DEBIT",  (0.01, 0.03)),
-    "BROADBAND":        ("DEBIT",  (0.02, 0.04)),
-    "SHOPPING":         ("DEBIT",  (0.05, 0.2)),
-    "ENTERTAINMENT":    ("DEBIT",  (0.03, 0.1)),
-    "TRAVEL":           ("DEBIT",  (0.05, 0.15)),
-}
+# Special User Tagging
+medical_shock_ids = random.sample(customers_df["customer_id"].tolist(), 150) # 3%
+cash_only_ids = random.sample(customers_df["customer_id"].tolist(), 300) # 6%
 
-CHANNELS = ["UPI", "NEFT", "IMPS", "ATM", "POS", "NET_BANKING", "AUTO_DEBIT"]
+stress_map = {}
+for _, c in customers_df.iterrows():
+    stress_map[c["customer_id"]] = {
+        "is_stressed": random.random() < 0.23,
+        "stress_level": random.uniform(0.4, 0.98)
+    }
 
 transactions = []
 txn_counter = 0
-base_date = datetime(2025, 1, 1)
+start_date = datetime(2025, 1, 1)
 
 for _, cust in customers_df.iterrows():
     cid = cust["customer_id"]
-    salary = cust["monthly_salary"]
+    seg = cust["customer_segment"]
+    income = cust["monthly_salary"]
     emi = cust["emi_amount"]
-    is_stressed = random.random() < 0.25  # 25% of customers show stress
+    is_stressed = stress_map[cid]["is_stressed"]
 
     for month in range(1, 13):
-        month_start = base_date + timedelta(days=(month - 1) * 30)
-
-        # Salary credit
-        salary_day = random.randint(1, 5) if not is_stressed else random.randint(5, 20)
-        txn_counter += 1
-        txn_date = month_start + timedelta(days=salary_day)
-        transactions.append([f"TXN-{txn_counter:07d}", cid, txn_date.strftime("%Y-%m-%d"),
-                             "CREDIT", "SALARY", int(salary * random.uniform(0.95, 1.05)),
-                             "NEFT", month])
-
-        # EMI payment
-        if emi > 0:
-            txn_counter += 1
-            emi_day = random.randint(1, 5)
-            failed = is_stressed and random.random() < 0.3
-            txn_date = month_start + timedelta(days=emi_day)
-            transactions.append([f"TXN-{txn_counter:07d}", cid, txn_date.strftime("%Y-%m-%d"),
-                                 "FAILED" if failed else "DEBIT", "EMI_PAYMENT",
-                                 emi, "AUTO_DEBIT", month])
-
-        # Generate multiple transactions per category per month
-        num_atm = random.randint(0, 3) if not is_stressed else random.randint(3, 8)
-        for _ in range(num_atm):
-            txn_counter += 1
-            txn_date = month_start + timedelta(days=random.randint(0, 29))
-            transactions.append([f"TXN-{txn_counter:07d}", cid, txn_date.strftime("%Y-%m-%d"),
-                                 "DEBIT", "ATM_WITHDRAWAL",
-                                 int(salary * random.uniform(0.02, 0.08)),
-                                 "ATM", month])
-
-        # Dining
-        for _ in range(random.randint(1, 5)):
-            txn_counter += 1
-            txn_date = month_start + timedelta(days=random.randint(0, 29))
-            transactions.append([f"TXN-{txn_counter:07d}", cid, txn_date.strftime("%Y-%m-%d"),
-                                 "DEBIT", "DINING",
-                                 int(salary * random.uniform(0.01, 0.04)),
-                                 random.choice(["UPI", "POS"]), month])
-
-        # UPI Lending App (stressed customers)
-        if is_stressed:
-            for _ in range(random.randint(1, 4)):
-                txn_counter += 1
-                txn_date = month_start + timedelta(days=random.randint(0, 29))
-                transactions.append([f"TXN-{txn_counter:07d}", cid, txn_date.strftime("%Y-%m-%d"),
-                                     "DEBIT", "UPI_LENDING_APP",
-                                     int(salary * random.uniform(0.05, 0.2)),
-                                     "UPI", month])
-
-        # Gambling (some stressed)
-        if is_stressed and random.random() < 0.4:
+        m_start = start_date + timedelta(days=(month - 1) * 30)
+        
+        # 1. INCOME SIGNALS (Winning Edge Cases)
+        i_date = m_start + timedelta(days=random.randint(1, 7))
+        if seg == "farmer":
+            if month in [4, 10]: # Harvest Months
+                amt = income * random.uniform(6, 12)
+                transactions.append([f"TXN-{txn_counter:07d}", cid, i_date.strftime("%Y-%m-%d"), "CREDIT", "HARVEST_PAYMENT", int(amt), "NEFT", month])
+            else:
+                if random.random() < 0.25: # Side income
+                    transactions.append([f"TXN-{txn_counter:07d}", cid, i_date.strftime("%Y-%m-%d"), "CREDIT", "OFF_SEASON_INCOME", int(income * 0.4), "CASH", month])
+        elif seg == "student":
+            transactions.append([f"TXN-{txn_counter:07d}", cid, i_date.strftime("%Y-%m-%d"), "CREDIT", "ALLOWANCE", int(income), "UPI", month])
+        elif seg == "freelancer":
             for _ in range(random.randint(1, 3)):
                 txn_counter += 1
-                txn_date = month_start + timedelta(days=random.randint(0, 29))
-                transactions.append([f"TXN-{txn_counter:07d}", cid, txn_date.strftime("%Y-%m-%d"),
-                                     "DEBIT", "GAMBLING_LOTTERY",
-                                     int(random.uniform(100, 2000)),
-                                     "UPI", month])
+                transactions.append([f"TXN-{txn_counter:07d}", cid, (m_start + timedelta(days=random.randint(1, 28))).strftime("%Y-%m-%d"), "CREDIT", "PROJECT_PAY", int(income * random.uniform(0.3, 0.8)), "IMPS", month])
+        else: # Salaried
+            s_day = random.randint(1, 5) if not is_stressed else random.randint(5, 18)
+            transactions.append([f"TXN-{txn_counter:07d}", cid, (m_start + timedelta(days=s_day)).strftime("%Y-%m-%d"), "CREDIT", "SALARY", int(income), "NEFT", month])
 
-        # Utility bills
-        for cat in ["ELECTRICITY", "WATER", "GAS", "BROADBAND"]:
+        # 2. ANOMALY SHOCKS (Medical)
+        if cid in medical_shock_ids and month == 8:
             txn_counter += 1
-            util_day = random.randint(5, 15) if not is_stressed else random.randint(15, 28)
-            txn_date = month_start + timedelta(days=util_day)
-            lo, hi = CATEGORIES[cat][1]
-            transactions.append([f"TXN-{txn_counter:07d}", cid, txn_date.strftime("%Y-%m-%d"),
-                                 "DEBIT", cat,
-                                 int(salary * random.uniform(lo, hi)),
-                                 random.choice(["AUTO_DEBIT", "NET_BANKING", "UPI"]), month])
+            transactions.append([f"TXN-{txn_counter:07d}", cid, (m_start + timedelta(days=14)).strftime("%Y-%m-%d"), "DEBIT", "MEDICAL_EMERGENCY", int(income * random.uniform(2.5, 5.0)), "IMPS", month])
 
-        # Shopping & Entertainment
-        for cat in ["SHOPPING", "ENTERTAINMENT", "TRAVEL"]:
-            n = random.randint(0, 3) if not is_stressed else random.randint(0, 1)
-            for _ in range(n):
-                txn_counter += 1
-                txn_date = month_start + timedelta(days=random.randint(0, 29))
-                lo, hi = CATEGORIES[cat][1]
-                transactions.append([f"TXN-{txn_counter:07d}", cid, txn_date.strftime("%Y-%m-%d"),
-                                     "DEBIT", cat,
-                                     int(salary * random.uniform(lo, hi)),
-                                     random.choice(["UPI", "POS", "NET_BANKING"]), month])
+        # 3. SPENDING SPIKES (Festival/Diwali)
+        is_diwali = (month == 10)
+        mult = 2.5 if is_diwali else 1.0
 
-transactions_df = pd.DataFrame(transactions, columns=[
-    "txn_id", "customer_id", "date", "txn_type", "category", "amount", "channel", "month"
-])
-transactions_df.to_csv(f"{DATA_DIR}/transactions.csv", index=False)
-print(f"✅ transactions.csv: {len(transactions_df)} rows")
+        # 4. DEBITS
+        if emi > 0:
+            txn_counter += 1
+            is_failed = is_stressed and random.random() < 0.3
+            transactions.append([f"TXN-{txn_counter:07d}", cid, (m_start + timedelta(days=5)).strftime("%Y-%m-%d"), "FAILED" if is_failed else "DEBIT", "EMI_PAYMENT", emi, "AUTO_DEBIT", month])
 
-# ─────────────────────────────────────────────────
-# FILE 3: weekly_behavioral_features.csv  (104,000 rows)
-# ─────────────────────────────────────────────────
-
-weekly_features = []
-for _, cust in customers_df.iterrows():
-    cid = cust["customer_id"]
-    salary = cust["monthly_salary"]
-    credit_limit = cust["credit_limit"]
-    credit_score = cust["credit_score"]
-    savings = cust["savings_balance_initial"]
-    is_stressed = random.random() < 0.25
-    stress_progression = random.uniform(0.3, 0.9) if is_stressed else 0.0
-
-    for week in range(1, 53):
-        t = week / 52  # time progression
+        for _ in range(random.randint(5, 15)):
+            txn_counter += 1
+            cat = random.choice(["SHOPPING", "DINING", "GROCERTIES", "ATM"])
+            amt = int(income * random.uniform(0.01, 0.1) * mult)
+            chan = "ATM" if (cid in cash_only_ids or cat == "ATM") else random.choice(["UPI", "POS"])
+            transactions.append([f"TXN-{txn_counter:07d}", cid, (m_start + timedelta(days=random.randint(1, 28))).strftime("%Y-%m-%d"), "DEBIT", cat, amt, chan, month])
 
         if is_stressed:
-            # Gradually worsening features
-            stress_factor = stress_progression * t
-            salary_delay = int(np.clip(np.random.normal(5 + 10 * stress_factor, 3), 0, 25))
-            savings_delta = np.random.normal(-5 - 15 * stress_factor, 5)
-            atm_count = int(np.clip(np.random.poisson(2 + 4 * stress_factor), 0, 15))
-            atm_amount = int(atm_count * salary * random.uniform(0.02, 0.06))
-            discretionary = int(salary * random.uniform(0.05, 0.15) * (1 - 0.5 * stress_factor))
-            lending_count = int(np.clip(np.random.poisson(1 + 3 * stress_factor), 0, 8))
-            lending_amount = int(lending_count * salary * random.uniform(0.05, 0.15))
-            failed_autodebit = int(np.clip(np.random.poisson(0.5 * stress_factor), 0, 3))
-            utility_delay = int(np.clip(np.random.normal(5 + 10 * stress_factor, 3), 0, 25))
-            gambling = int(np.clip(np.random.exponential(300 * stress_factor), 0, 5000))
-            credit_util = np.clip(random.uniform(0.3, 0.5) + 0.4 * stress_factor, 0, 1)
-            net_cash = int(salary * random.uniform(-0.3, 0.1) * (1 - stress_factor))
-        else:
-            salary_delay = int(np.clip(np.random.normal(2, 2), 0, 8))
-            savings_delta = np.random.normal(2, 3)
-            atm_count = int(np.clip(np.random.poisson(1.5), 0, 6))
-            atm_amount = int(atm_count * salary * random.uniform(0.01, 0.04))
-            discretionary = int(salary * random.uniform(0.1, 0.25))
-            lending_count = 0
-            lending_amount = 0
-            failed_autodebit = 0
-            utility_delay = int(np.clip(np.random.normal(3, 2), 0, 10))
-            gambling = 0
-            credit_util = np.clip(random.uniform(0.1, 0.4), 0, 1)
-            net_cash = int(salary * random.uniform(0.05, 0.3))
+            txn_counter += 1
+            transactions.append([f"TXN-{txn_counter:07d}", cid, (m_start + timedelta(days=22)).strftime("%Y-%m-%d"), "DEBIT", "LENDING_APP_REPAY", int(income * 0.25), "UPI", month])
 
-        savings = max(0, savings * (1 + savings_delta / 100))
-
-        # Risk score: composite of all signals
-        risk_components = [
-            min(salary_delay / 20, 1) * 0.15,
-            min(abs(min(savings_delta, 0)) / 30, 1) * 0.12,
-            min(atm_count / 8, 1) * 0.08,
-            min(lending_count / 5, 1) * 0.12,
-            min(failed_autodebit / 2, 1) * 0.15,
-            min(utility_delay / 15, 1) * 0.08,
-            min(gambling / 2000, 1) * 0.05,
-            min(credit_util, 1) * 0.10,
-            max(0, 1 - net_cash / (salary * 0.2)) * 0.10 if salary > 0 else 0,
-            max(0, 1 - discretionary / (salary * 0.15)) * 0.05,
-        ]
-        risk_score = np.clip(sum(risk_components) + np.random.normal(0, 0.05), 0, 1)
-
-        # Stress level: 0, 1, 2
-        if risk_score < 0.35:
-            stress_level = 0
-        elif risk_score < 0.60:
-            stress_level = 1
-        else:
-            stress_level = 2
-
-        # Will default: based on risk_score with noise
-        default_prob = 1 / (1 + np.exp(-8 * (risk_score - 0.55)))
-        will_default = 1 if random.random() < default_prob else 0
-
-        weekly_features.append([
-            cid, week, 2025, stress_level, salary_delay, round(savings, 2),
-            round(savings_delta, 2), atm_count, atm_amount, discretionary,
-            lending_count, lending_amount, failed_autodebit, utility_delay,
-            gambling, round(credit_util, 4), net_cash, round(risk_score, 4),
-            will_default
-        ])
-
-weekly_df = pd.DataFrame(weekly_features, columns=[
-    "customer_id", "week_number", "year", "stress_level", "salary_delay_days",
-    "savings_balance", "savings_wow_delta_pct", "atm_withdrawal_count_7d",
-    "atm_withdrawal_amount_7d", "discretionary_spend_7d", "lending_upi_count_7d",
-    "lending_upi_amount_7d", "failed_autodebit_count", "utility_payment_delay_days",
-    "gambling_spend_7d", "credit_utilization", "net_cashflow_7d", "risk_score",
-    "will_default_next_30d"
-])
-weekly_df.to_csv(f"{DATA_DIR}/weekly_behavioral_features.csv", index=False)
-print(f"✅ weekly_behavioral_features.csv: {len(weekly_df)} rows")
-print(f"   Default rate: {weekly_df['will_default_next_30d'].mean():.1%}")
+df_txns = pd.DataFrame(transactions, columns=["txn_id", "customer_id", "date", "txn_type", "category", "amount", "channel", "month"])
+df_txns.to_csv(f"{DATA_DIR}/transactions.csv", index=False)
+print(f"✅ transactions.csv: {len(df_txns)} rows.")
 
 # ─────────────────────────────────────────────────
-# FILE 4: intervention_log.csv  (~32,000 rows)
+# PHASE 3: Generate Weekly Behavioral Features (260k)
 # ─────────────────────────────────────────────────
 
-INTERVENTION_TYPES = ["PAYMENT_HOLIDAY", "RESTRUCTURING_OFFER", "FINANCIAL_COUNSELING",
-                      "RM_CALL", "SMS_OUTREACH", "MONITOR_ONLY"]
-INT_CHANNELS = ["SMS", "EMAIL", "APP", "CALL"]
-INT_STATUSES = ["SENT", "DELIVERED", "OPENED", "ACTED_UPON", "IGNORED"]
-INT_OUTCOMES = ["RECOVERED", "PENDING", "NO_ACTION"]
-TOP_SIGNALS = ["salary_delay_days", "savings_wow_delta_pct", "credit_utilization",
-               "failed_autodebit_count", "lending_upi_count_7d", "atm_withdrawal_count_7d",
-               "utility_payment_delay_days", "gambling_spend_7d"]
+weekly_data = []
+for _, cust in customers_df.iterrows():
+    cid = cust["customer_id"]
+    income = cust["monthly_salary"]
+    seg = cust["customer_segment"]
+    is_stressed = stress_map[cid]["is_stressed"]
+    stress_prog = stress_map[cid]["stress_level"]
+    
+    prev_util = 0.15
+    prev_net = 0
+    history_cashflow = []
 
-interventions = []
-for _, row in weekly_df[weekly_df["risk_score"] >= 0.40].iterrows():
-    if random.random() < 0.55:  # Not all flagged get interventions
-        risk = row["risk_score"]
-        if risk >= 0.70:
-            itype = random.choice(["PAYMENT_HOLIDAY", "RM_CALL", "RESTRUCTURING_OFFER"])
-        elif risk >= 0.55:
-            itype = random.choice(["FINANCIAL_COUNSELING", "SMS_OUTREACH", "RESTRUCTURING_OFFER"])
+    for week in range(1, 53):
+        t = week / 52
+        month = (week - 1) // 4 + 1
+        is_harvest = (seg == "farmer" and month in [4, 10])
+        is_festival = (month == 10)
+        
+        # ── Behavioral Degradation Logic ──
+        if is_stressed:
+            sf = stress_prog * t # Stress Factor
+            salary_delay = int(np.clip(np.random.normal(6 + 15 * sf, 3), 0, 30))
+            if is_harvest: salary_delay = 0 # Buffer during harvest
+            
+            util = np.clip(0.3 + 0.6 * sf, 0, 1)
+            atms = int(np.clip(np.random.poisson(2 + 4 * sf), 0, 10))
+            failed = 1 if (random.random() < 0.35 * sf) else 0
+            net = int(income * random.uniform(-0.5, 0.05) * (1 - sf))
+            
+            # Shock Impact
+            if cid in medical_shock_ids and week in [30, 31, 32]: # Impact of Month 8 shock
+                net -= income * 4
+                util = 0.98
         else:
-            itype = random.choice(["SMS_OUTREACH", "MONITOR_ONLY"])
+            salary_delay = random.randint(0, 3)
+            util = random.uniform(0.1, 0.3)
+            atms = random.randint(0, 2)
+            failed = 0
+            net = int(income * random.uniform(0.1, 0.35))
+            if is_festival: util += 0.3 # One-time spending spike
 
-        status = random.choice(INT_STATUSES)
-        if status in ["ACTED_UPON"]:
-            outcome = random.choice(["RECOVERED"] * 3 + ["PENDING"])
-        elif status == "IGNORED":
-            outcome = random.choice(["NO_ACTION"] * 2 + ["PENDING"])
-        else:
-            outcome = random.choice(INT_OUTCOMES)
-
-        interventions.append([
-            row["customer_id"], row["week_number"], round(risk, 4),
-            itype, random.choice(INT_CHANNELS), status, outcome,
-            random.choice(TOP_SIGNALS)
+        # ── Decision Intelligence: Score Simulation ──
+        # Formula: Base Risk + Behavioral Delta
+        raw_risk = (salary_delay / 30 * 0.3) + (util * 0.3) + (failed * 0.3) + (max(0, -net/income) * 0.1)
+        
+        # Decision Bias Correction (Forced in Data for ML Training)
+        adjusted_risk = raw_risk
+        if is_festival: adjusted_risk *= 0.8 # Normalize festival spending
+        if cid in medical_shock_ids and week in [30, 31, 32]: adjusted_risk *= 0.65 # Medical shock protection
+        if seg == "farmer" and not is_harvest: adjusted_risk += 0.05 # Contextual uncertainty
+        
+        final_score = np.clip(adjusted_risk + np.random.normal(0, 0.05), 0, 1)
+        
+        stress_lvl = 0 if final_score < 0.35 else 1 if final_score < 0.7 else 2
+        will_default = 1 if (final_score > 0.85 and random.random() < 0.7) else 0
+        
+        # ── Days to Default Estimation ──
+        if final_score > 0.9: dtd = random.randint(5, 12)
+        elif final_score > 0.7: dtd = random.randint(13, 28)
+        else: dtd = random.randint(60, 365)
+        
+        weekly_data.append([
+            cid, week, 2025, stress_lvl, salary_delay, int(income * 3), # savings
+            round(random.uniform(-4, 4), 2), atms, atms * 4000, 15000,
+            2 if is_stressed else 0, 12000, failed, 0, 0,
+            round(util, 4), net, round(final_score, 4),
+            seg, random.randint(0, 5) if is_stressed else 0,
+            round(random.uniform(0.2, 0.9), 4),
+            round((net - prev_net)/10000.0, 4),
+            round(util - prev_util, 4), net - prev_net,
+            round(final_score * 1.1, 4),
+            1 if (is_stressed and t > 0.83 and random.random() < 0.2) else 0, # recovered
+            dtd, will_default
         ])
+        prev_util = util
+        prev_net = net
 
-intervention_df = pd.DataFrame(interventions, columns=[
-    "customer_id", "week_number", "risk_score_at_trigger", "intervention_type",
-    "channel", "status", "outcome", "top_signal"
-])
-intervention_df.to_csv(f"{DATA_DIR}/intervention_log.csv", index=False)
-print(f"✅ intervention_log.csv: {len(intervention_df)} rows")
-print(f"\n🎉 All 4 CSV files generated in {DATA_DIR}/")
+cols = ["customer_id", "week_number", "year", "stress_level", "salary_delay_days", "savings_balance", "savings_wow_delta_pct", "atm_withdrawal_count_7d", "atm_withdrawal_amount_7d", "discretionary_spend_7d", "lending_upi_count_7d", "lending_upi_amount_7d", "failed_autodebit_count", "utility_payment_delay_days", "gambling_spend_7d", "credit_utilization", "net_cashflow_7d", "risk_score", "customer_segment", "round_number_withdrawal_count_7d", "weekend_spend_ratio", "net_cashflow_trend_slope", "delta_utilization", "delta_cashflow", "stress_score_interaction", "customer_recovered_after_intervention", "days_to_default", "will_default_next_30d"]
+df_weekly = pd.DataFrame(weekly_data, columns=cols)
+df_weekly.to_csv(f"{DATA_DIR}/weekly_behavioral_features.csv", index=False)
+print(f"✅ weekly_behavioral_features.csv: {len(df_weekly)} rows.")
+
+# ─────────────────────────────────────────────────
+# PHASE 4: Intervention Log
+# ─────────────────────────────────────────────────
+logs = []
+for _, row in df_weekly[(df_weekly["week_number"] == 52) & (df_weekly["risk_score"] > 0.45)].iterrows():
+    logs.append([row["customer_id"], 52, row["risk_score"], "RM_CALL" if row["risk_score"] > 0.7 else "SMS_LINK", "CALL", "SENT", "PENDING", "salary_delay_days"])
+
+pd.DataFrame(logs, columns=["customer_id", "week_number", "risk_score_at_trigger", "intervention_type", "channel", "status", "outcome", "top_signal"]).to_csv(f"{DATA_DIR}/intervention_log.csv", index=False)
+print(f"✅ intervention_log.csv: {len(logs)} rows.")
+print("\n🎉 BANK-GRADE DATASET READY FOR TRAINING.")

@@ -100,6 +100,35 @@ class FeatureEngineer:
         # 12. net_cashflow_7d
         net_cashflow = credits_7d - debits_7d
 
+        # 13. round_number_withdrawal_count_7d
+        round_withdrawals = txns_7d[atm_mask & ((txns_7d["amount"] % 5000 == 0) | (txns_7d["amount"] % 1000 == 0))]
+        round_count = len(round_withdrawals)
+
+        # 14. weekend_spend_ratio
+        disc_txns = txns_7d[txns_7d["category"].isin(disc_cats)]
+        if len(disc_txns) > 0 and discretionary > 0:
+            weekend_spend = disc_txns[disc_txns["date"].dt.dayofweek >= 5]["amount"].sum()
+            weekend_ratio = weekend_spend / discretionary
+        else:
+            weekend_ratio = 0
+
+        # 15. net_cashflow_trend_slope (4 weeks history)
+        if reference_week >= 4:
+            history_start = week_end - pd.Timedelta(days=28)
+            mask_28d = (txns["date"] >= history_start) & (txns["date"] < week_end)
+            txns_28d = txns[mask_28d]
+            # Simple calculation using 1st week vs 4th week
+            w1_start = history_start
+            w1_end = history_start + pd.Timedelta(days=7)
+            w1_txns = txns_28d[(txns_28d["date"] >= w1_start) & (txns_28d["date"] < w1_end)]
+            w1_cashflow = w1_txns[w1_txns["txn_type"] == "CREDIT"]["amount"].sum() - w1_txns[w1_txns["txn_type"] == "DEBIT"]["amount"].sum()
+            
+            slope = (net_cashflow - w1_cashflow) / 4.0
+        else:
+            slope = 0.0
+
+        customer_segment = cust.get("customer_segment", 0)
+
         return {
             "customer_id": customer_id,
             "week_number": reference_week,
@@ -115,6 +144,10 @@ class FeatureEngineer:
             "gambling_spend_7d": int(gambling),
             "credit_utilization": round(credit_util, 4),
             "net_cashflow_7d": int(net_cashflow),
+            "customer_segment": int(customer_segment),
+            "round_number_withdrawal_count_7d": int(round_count),
+            "weekend_spend_ratio": round(weekend_ratio, 4),
+            "net_cashflow_trend_slope": round(slope, 4),
         }
 
     def batch_compute(self, output_path="data/computed_features.csv"):

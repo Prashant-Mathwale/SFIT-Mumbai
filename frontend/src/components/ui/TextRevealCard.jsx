@@ -1,4 +1,5 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
+import { getLandingMetrics } from '../../api/client';
 
 /* ═══════════════════════════════════════════════════════════════
    TextRevealCard — Aceternity-style hover reveal component
@@ -212,6 +213,7 @@ export function TextRevealCardDescription({ children, style = {} }) {
    ═══════════════════════════════════════════════════════════════ */
 export function TextRevealCardPreview() {
   const [visible, setVisible] = useState(false);
+  const [stats, setStats] = useState({ portfolio: 16.5, customers: 5000, acc: 88 });
   const sectionRef = useRef(null);
 
   useEffect(() => {
@@ -220,24 +222,35 @@ export function TextRevealCardPreview() {
       { threshold: 0.3 }
     );
     if (sectionRef.current) observer.observe(sectionRef.current);
+    
+    getLandingMetrics().then(m => {
+       if (m) {
+          setStats({ 
+            portfolio: m.avoided_loss_cr || 0.0, 
+            customers: m.total_customers || 0, 
+            acc: m.accuracy_stat || 0 
+          });
+       }
+    }).catch(()=>{});
+
     return () => observer.disconnect();
   }, []);
 
   const pills = [
     {
-      text: '₹16.5 Cr losses prevented',
+      text: `₹${stats.portfolio} Cr losses prevented`,
       bg: 'rgba(16,185,129,0.1)',
       border: '1px solid rgba(16,185,129,0.2)',
       color: '#34d399',
     },
     {
-      text: '500 customers monitored',
+      text: `${stats.customers} customers monitored`,
       bg: 'rgba(99,102,241,0.1)',
       border: '1px solid rgba(99,102,241,0.2)',
       color: '#818cf8',
     },
     {
-      text: '74% ensemble accuracy',
+      text: `${stats.acc}% ensemble accuracy`,
       bg: 'rgba(6,182,212,0.1)',
       border: '1px solid rgba(6,182,212,0.2)',
       color: '#22d3ee',

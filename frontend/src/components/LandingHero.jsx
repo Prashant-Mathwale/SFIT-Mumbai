@@ -17,8 +17,8 @@ function NeuralBackground() {
     let animId;
     let w, h;
 
-    const PARTICLE_COUNT = 90;
-    const MAX_DIST = 140;
+    const PARTICLE_COUNT = 55;
+    const MAX_DIST = 120;
     const particles = [];
 
     const resize = () => {
@@ -118,7 +118,7 @@ export default function LandingHero({ onEnterDashboard }) {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent: 'flex-start',
       padding: '40px 24px',
       background: '#0a0a0f',
       position: 'relative',
@@ -126,7 +126,7 @@ export default function LandingHero({ onEnterDashboard }) {
       <NeuralBackground />
 
       {/* Card wrapper — relative so it sits above canvas */}
-      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 800 }}>
+      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 800, marginTop: '10vh' }}>
         <TextRevealCardPreview />
       </div>
 
@@ -146,6 +146,86 @@ export default function LandingHero({ onEnterDashboard }) {
       >
         Enter Risk Operations Center →
       </button>
+
+      <section className="project-brief" style={{ position: 'relative', zIndex: 1 }}>
+        <h2>Pre-Delinquency Intervention Engine</h2>
+        <p>
+          Banks lose recovery potential when intervention begins only after missed payments.
+          This platform detects early stress signals 2-4 weeks in advance and enables timely,
+          explainable, and empathetic outreach.
+        </p>
+
+        <div className="brief-grid">
+          <article className="brief-card">
+            <h3>Problem Statement</h3>
+            <p>
+              Traditional collections are reactive, expensive, and relationship-damaging.
+              Institutions need an early-warning system that identifies distress before delinquency.
+            </p>
+          </article>
+
+          <article className="brief-card">
+            <h3>Challenge</h3>
+            <p>
+              Early stress signals are subtle and scattered across channels, accounts, and products.
+              Banks need a unified predictive view with fair and explainable decisions.
+            </p>
+          </article>
+
+          <article className="brief-card">
+            <h3>Technology Stack</h3>
+            <ul>
+              <li>Open Source: LightGBM, XGBoost, scikit-learn, PyTorch, TensorFlow</li>
+              <li>Realtime/Data: Feast, Airflow, Kafka, BentoML, MLflow</li>
+              <li>AWS: SageMaker, Kinesis, Redshift, DynamoDB, SNS, QuickSight</li>
+            </ul>
+          </article>
+
+          <article className="brief-card">
+            <h3>Realtime Signals</h3>
+            <ul>
+              <li>Salary credited later than usual</li>
+              <li>Savings balance drop week-over-week</li>
+              <li>UPI transfers to lending apps spike</li>
+              <li>Utility payment delays in billing cycle</li>
+              <li>Discretionary spend drops, ATM withdrawals rise</li>
+              <li>Failed auto-debit attempts</li>
+            </ul>
+          </article>
+
+          <article className="brief-card">
+            <h3>Design Considerations</h3>
+            <ul>
+              <li>Data analytics across multiple source systems</li>
+              <li>Low-noise alerting and automation</li>
+              <li>Scalable predictive modeling and orchestration</li>
+              <li>Context-aware, cross-channel correlation</li>
+              <li>Clear visualization for operations teams</li>
+            </ul>
+          </article>
+
+          <article className="brief-card">
+            <h3>What to Build</h3>
+            <ul>
+              <li>Realtime transaction pattern analysis</li>
+              <li>Early-warning detection of financial stress</li>
+              <li>Default risk forecast 2-4 weeks ahead</li>
+              <li>Automated pre-delinquency intervention triggers</li>
+            </ul>
+          </article>
+        </div>
+
+        <article className="brief-card benefits">
+          <h3>Expected Benefits</h3>
+          <ul>
+            <li>Reduced credit losses through earlier action</li>
+            <li>Lower collections cost and manual overhead</li>
+            <li>Higher recovery rates and portfolio performance</li>
+            <li>Stronger customer trust with supportive outreach</li>
+            <li>Regulatory alignment via fair, explainable treatment</li>
+          </ul>
+        </article>
+      </section>
     </div>
   );
 }

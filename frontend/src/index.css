@@ -38,7 +38,6 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
-  animation: gridPulse 10s ease-in-out infinite;
 }
 
 /* ── SCROLLBAR (Premium Terminal) ── */
@@ -299,31 +298,44 @@ body {
 .count-badge { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-left: auto; }
 
 .table-container { padding: 0 0 24px; }
-.risk-table { background: var(--bg-surface-1); border: 1px solid var(--border-default); border-radius: 16px; overflow: hidden; }
-.risk-table table { width: 100%; border-collapse: collapse; }
-.risk-table thead tr { background: var(--bg-surface-2); height: 48px; }
+.risk-table { background: var(--bg-surface-1); border: 1px solid var(--border-default); border-radius: 16px; overflow-x: auto; overflow-y: hidden; }
+.risk-table table { width: 100%; min-width: 1120px; border-collapse: collapse; table-layout: auto; }
+.risk-table col.col-select { width: 44px; min-width: 44px; }
+.risk-table col.col-customer { width: 200px; min-width: 190px; }
+.risk-table col.col-score { width: 170px; min-width: 160px; }
+.risk-table col.col-level { width: 130px; min-width: 120px; }
+.risk-table col.col-anomaly { width: 90px; min-width: 84px; }
+.risk-table col.col-signals { width: 320px; min-width: 280px; }
+.risk-table col.col-trend { width: 130px; min-width: 120px; }
+.risk-table col.col-action { width: 130px; min-width: 120px; }
+.risk-table thead tr { background: var(--bg-surface-2); height: 52px; }
 .risk-table th {
   font-family: var(--font-body); font-size: 11px; text-transform: uppercase;
-  letter-spacing: 1px; color: var(--text-muted); text-align: left; padding: 0 20px;
+  letter-spacing: 1px; color: var(--text-muted); text-align: left; padding: 0 14px;
   border-bottom: 1px solid var(--border-default);
 }
 .risk-table tbody tr {
-  height: 64px; border-bottom: 1px solid rgba(255,255,255,0.04);
-  transition: background 200ms ease, border-left 200ms ease;
+  height: 72px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  transition: background 200ms ease;
   position: relative;
 }
 .risk-table tbody tr:hover { background: rgba(0,212,255,0.04); }
 .risk-table tbody tr.high-risk { border-left: 3px solid var(--accent-red); }
-.risk-table tbody tr.high-risk:hover { background: rgba(255,71,87,0.04); }
-/* Row hover left stripe */
-.risk-table tbody tr::before {
-  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-  transform: scaleY(0); transform-origin: top; transition: transform 150ms ease;
-  background: var(--accent-cyan); border-radius: 0 2px 2px 0;
+.risk-table tbody tr.high-risk:hover { background: rgba(255,71,87,0.06); }
+.risk-table tbody tr.medium-risk { border-left: 3px solid var(--accent-orange); }
+.risk-table tbody tr.medium-risk:hover { background: rgba(255,107,53,0.04); }
+.risk-table tbody tr.low-risk { border-left: 3px solid var(--accent-green); }
+.risk-table tbody tr.low-risk:hover { background: rgba(6,255,165,0.02); }
+.risk-table td { padding: 10px 14px; vertical-align: middle; }
+.risk-table th,
+.risk-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
 }
-.risk-table tbody tr:hover::before { transform: scaleY(1); }
-.risk-table tbody tr.high-risk::before { background: var(--accent-red); }
-.risk-table td { padding: 0 20px; vertical-align: middle; }
+.risk-table td:nth-child(6) {
+  white-space: normal;
+}
 
 .td-id { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--text-primary); }
 .td-name { font-family: var(--font-body); font-size: 12px; color: var(--text-secondary); }
@@ -357,7 +369,7 @@ body {
   background: transparent; border: 1px solid rgba(0,212,255,0.2);
   color: var(--accent-cyan); font-family: var(--font-body); font-size: 13px;
   font-weight: 500; padding: 6px 16px; border-radius: 6px; cursor: pointer;
-  transition: all 200ms;
+  transition: all 200ms; white-space: nowrap;
 }
 .btn-inspect:hover { background: rgba(0,212,255,0.08); border-color: rgba(0,212,255,0.5); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,212,255,0.15); }
 
@@ -633,6 +645,37 @@ body {
 .toast-text { font-family: var(--font-body); font-size: 13px; color: var(--text-primary); }
 .toast-progress { position: absolute; bottom: 0; left: 0; height: 3px; border-radius: 0 0 10px 10px; transition: width linear; }
 
+/* ── BULK ACTION BAR ── */
+.bulk-action-bar {
+  position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+  background: rgba(15,15,26,0.9); backdrop-filter: blur(12px);
+  border: 1px solid rgba(0,212,255,0.4); border-radius: 12px;
+  padding: 12px 24px; display: flex; align-items: center; gap: 24px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.6); z-index: 1001;
+  animation: fadeSlideUp 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.bulk-count { font-family: var(--font-mono); font-size: 13px; color: var(--accent-cyan); font-weight: 600; }
+.bulk-btn {
+  background: var(--accent-cyan); color: var(--bg-primary); border: none;
+  padding: 8px 16px; border-radius: 6px; font-family: var(--font-heading);
+  font-weight: 700; font-size: 13px; cursor: pointer; transition: all 200ms;
+}
+.bulk-btn:hover { transform: scale(1.05); filter: brightness(1.1); box-shadow: 0 0 20px rgba(0,212,255,0.4); }
+.bulk-btn.secondary { background: rgba(255,255,255,0.05); color: #9999bb; border: 1px solid rgba(255,255,255,0.1); }
+.bulk-btn.secondary:hover { color: white; border-color: rgba(255,255,255,0.3); }
+
+/* ── STREAM FEED ── */
+.stream-feed .kpi-strip-tile {
+  background: rgba(255,255,255,0.02);
+  border-color: rgba(255,255,255,0.05);
+  transition: all 300ms ease;
+}
+.stream-feed .kpi-strip-tile:hover {
+  background: rgba(0,212,255,0.05);
+  border-color: rgba(0,212,255,0.2);
+  transform: translateX(4px);
+}
+
 .empty-state { text-align: center; padding: 60px 24px; }
 .empty-state svg { width: 80px; height: 80px; margin-bottom: 16px; opacity: 0.15; }
 .empty-state .title { font-family: var(--font-body); font-weight: 400; font-size: 16px; color: var(--text-muted); }
@@ -660,6 +703,55 @@ body {
 .landing-hero canvas { position: absolute; inset: 0; z-index: 0; }
 .landing-hero-content {
   position: relative; z-index: 1; text-align: center; padding: 0 24px;
+}
+
+.project-brief {
+  margin: 56px auto 80px;
+  width: min(1200px, 100%);
+  background: rgba(15, 15, 26, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 28px;
+  backdrop-filter: blur(8px);
+}
+.project-brief h2 {
+  font-family: var(--font-heading);
+  font-size: 30px;
+  margin-bottom: 8px;
+}
+.project-brief > p {
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+  line-height: 1.7;
+}
+.brief-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.brief-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  padding: 16px;
+}
+.brief-card h3 {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  margin-bottom: 8px;
+  color: var(--accent-cyan);
+}
+.brief-card p,
+.brief-card li {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.brief-card ul {
+  padding-left: 18px;
+}
+.brief-card.benefits {
+  margin-top: 12px;
 }
 .hero-tagline {
   font-family: var(--font-heading); font-weight: 800; font-size: 64px;
@@ -789,9 +881,11 @@ body {
   position: fixed; top: 0; right: 0; bottom: 0; width: 420px;
   background: var(--bg-surface-2); border-left: 1px solid var(--border-default);
   z-index: 601; padding: 32px; overflow-y: auto;
-  animation: modalSlideIn 300ms ease;
-  box-shadow: -20px 0 60px rgba(0,0,0,0.5);
+  animation: modalSlideIn 400ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: -20px 0 80px rgba(0,0,0,0.8);
+  border-left: 1px solid rgba(0,212,255,0.2);
 }
+.side-panel h3 { font-family: var(--font-heading); font-size: 24px; color: var(--accent-cyan); text-shadow: 0 0 20px rgba(0,212,255,0.3); }
 
 /* ── RESPONSIVE ADJUSTMENTS ── */
 @media (max-width: 1200px) {
@@ -808,8 +902,10 @@ body {
   .kpi-grid { grid-template-columns: 1fr; padding: 16px; }
   .filter-bar { padding: 0 16px 16px; flex-wrap: wrap; }
   .table-container { padding: 0 16px 16px; }
+  .risk-table table { min-width: 980px; }
   .nav-tabs { display: none; }
   .signal-cards { grid-template-columns: 1fr; }
   .hero-tagline { font-size: 36px; }
   .hero-metrics { flex-direction: column; gap: 24px; }
+  .brief-grid { grid-template-columns: 1fr; }
 }

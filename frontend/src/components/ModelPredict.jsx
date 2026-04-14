@@ -1,55 +1,54 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { predictRisk, getModelInfo } from '../api/client';
+import Loader from './ui/Loader';
 
 const FEATURE_FIELDS = [
-  { key: 'total_rec_late_fee', label: 'Late Fees Received', prefix: '$', default: 0, max: 500, step: 1, desc: 'Total late fees received to date' },
-  { key: 'recoveries', label: 'Recoveries', prefix: '$', default: 0, max: 5000, step: 10, desc: 'Post-charge-off recovery amount' },
-  { key: 'last_pymnt_amnt', label: 'Last Payment Amount', prefix: '$', default: 357.48, max: 5000, step: 10, desc: 'Last payment received' },
-  { key: 'loan_amnt_div_instlmnt', label: 'Loan / Installment Ratio', prefix: '', default: 36.1, max: 100, step: 0.1, desc: 'Loan amount ÷ monthly installment' },
-  { key: 'debt_settlement_flag', label: 'Debt Settlement Flag', prefix: '', default: 0, max: 1, step: 1, desc: '1 = debt settlement active' },
-  { key: 'loan_age', label: 'Loan Age (months)', prefix: '', default: 36, max: 120, step: 1, desc: 'Months since loan origination' },
-  { key: 'total_rec_int', label: 'Total Interest Received', prefix: '$', default: 2214.92, max: 20000, step: 10, desc: 'Total interest received to date' },
-  { key: 'out_prncp', label: 'Outstanding Principal', prefix: '$', default: 0, max: 50000, step: 100, desc: 'Remaining principal balance' },
-  { key: 'time_since_last_credit_pull', label: 'Months Since Credit Pull', prefix: '', default: 1, max: 60, step: 1, desc: 'Months since last credit check' },
-  { key: 'time_since_last_payment', label: 'Months Since Last Payment', prefix: '', default: 1, max: 60, step: 1, desc: 'Months since last payment' },
-  { key: 'int_rate_pct', label: 'Interest Rate (%)', prefix: '', default: 13.56, max: 35, step: 0.01, desc: 'Annual interest rate' },
-  { key: 'total_rec_prncp', label: 'Total Principal Received', prefix: '$', default: 10000, max: 50000, step: 100, desc: 'Total principal received to date' },
+  { key: 'salary_delay_days', label: 'Salary Delay (days)', prefix: '', default: 0, max: 30, step: 1, desc: 'Days salary credit is delayed' },
+  { key: 'savings_wow_delta_pct', label: 'Savings WoW Delta (%)', prefix: '', default: -5, max: 100, step: 1, desc: 'Weekly change in savings balance' },
+  { key: 'atm_withdrawal_count_7d', label: 'ATM Withdrawals (7d)', prefix: '', default: 1, max: 30, step: 1, desc: 'Cash withdrawal count in last 7 days' },
+  { key: 'atm_withdrawal_amount_7d', label: 'ATM Amount (7d)', prefix: '₹', default: 1200, max: 100000, step: 100, desc: 'Cash withdrawn in last 7 days' },
+  { key: 'discretionary_spend_7d', label: 'Discretionary Spend (7d)', prefix: '₹', default: 3000, max: 100000, step: 100, desc: 'Non-essential spend in last 7 days' },
+  { key: 'lending_upi_count_7d', label: 'UPI to Lenders (7d)', prefix: '', default: 0, max: 20, step: 1, desc: 'Transfers to lending apps in last 7 days' },
+  { key: 'lending_upi_amount_7d', label: 'UPI Lender Amount (7d)', prefix: '₹', default: 0, max: 100000, step: 100, desc: 'Amount sent to lending apps in last 7 days' },
+  { key: 'failed_autodebit_count', label: 'Failed Autodebits', prefix: '', default: 0, max: 10, step: 1, desc: 'Failed EMI auto-debit attempts' },
+  { key: 'utility_payment_delay_days', label: 'Utility Delay (days)', prefix: '', default: 0, max: 45, step: 1, desc: 'Days late in utility payments' },
+  { key: 'gambling_spend_7d', label: 'Gambling Spend (7d)', prefix: '₹', default: 0, max: 50000, step: 100, desc: 'Gaming/betting spend in last 7 days' },
+  { key: 'credit_utilization', label: 'Credit Utilization', prefix: '', default: 0.35, max: 1, step: 0.01, desc: 'Utilization ratio from 0 to 1' },
+  { key: 'net_cashflow_7d', label: 'Net Cashflow (7d)', prefix: '₹', default: 2500, max: 100000, step: 100, desc: 'Income minus expense in last 7 days' },
 ];
 
 // Map CSV headers (various formats) to our feature keys
 const CSV_HEADER_MAP = {
-  'total_rec_late_fee': 'total_rec_late_fee',
-  'recoveries': 'recoveries',
-  'last_pymnt_amnt': 'last_pymnt_amnt',
-  'loan_amnt_div_instlmnt': 'loan_amnt_div_instlmnt',
-  'debt_settlement_flag': 'debt_settlement_flag',
-  'loan_age': 'loan_age',
-  'total_rec_int': 'total_rec_int',
-  'out_prncp': 'out_prncp',
-  'time_since_last_credit_pull': 'time_since_last_credit_pull',
-  'time_since_last_payment': 'time_since_last_payment',
-  'int_rate%': 'int_rate_pct',
-  'int_rate_pct': 'int_rate_pct',
-  'int_rate': 'int_rate_pct',
-  'total_rec_prncp': 'total_rec_prncp',
+  'salary_delay_days': 'salary_delay_days',
+  'savings_wow_delta_pct': 'savings_wow_delta_pct',
+  'atm_withdrawal_count_7d': 'atm_withdrawal_count_7d',
+  'atm_withdrawal_amount_7d': 'atm_withdrawal_amount_7d',
+  'discretionary_spend_7d': 'discretionary_spend_7d',
+  'lending_upi_count_7d': 'lending_upi_count_7d',
+  'lending_upi_amount_7d': 'lending_upi_amount_7d',
+  'failed_autodebit_count': 'failed_autodebit_count',
+  'utility_payment_delay_days': 'utility_payment_delay_days',
+  'gambling_spend_7d': 'gambling_spend_7d',
+  'credit_utilization': 'credit_utilization',
+  'net_cashflow_7d': 'net_cashflow_7d',
 };
 
 const PRESETS = {
   healthy: {
     name: '✅ Healthy Loan',
     desc: 'Fully performing, on-time payments, low risk',
-    values: { total_rec_late_fee: 0, recoveries: 0, last_pymnt_amnt: 485.31, loan_amnt_div_instlmnt: 30.7, debt_settlement_flag: 0, loan_age: 36, total_rec_int: 4200, out_prncp: 0, time_since_last_credit_pull: 1, time_since_last_payment: 1, int_rate_pct: 10.5, total_rec_prncp: 15000 }
+    values: { salary_delay_days: 0, savings_wow_delta_pct: 2, atm_withdrawal_count_7d: 1, atm_withdrawal_amount_7d: 1200, discretionary_spend_7d: 3500, lending_upi_count_7d: 0, lending_upi_amount_7d: 0, failed_autodebit_count: 0, utility_payment_delay_days: 0, gambling_spend_7d: 0, credit_utilization: 0.28, net_cashflow_7d: 6500 }
   },
   warning: {
     name: '⚠️ Warning Signs',
     desc: 'Missed payments, rising interest, stress signals',
-    values: { total_rec_late_fee: 35, recoveries: 0, last_pymnt_amnt: 0, loan_amnt_div_instlmnt: 45, debt_settlement_flag: 0, loan_age: 18, total_rec_int: 1800, out_prncp: 8500, time_since_last_credit_pull: 3, time_since_last_payment: 4, int_rate_pct: 22.5, total_rec_prncp: 3200 }
+    values: { salary_delay_days: 3, savings_wow_delta_pct: -22, atm_withdrawal_count_7d: 6, atm_withdrawal_amount_7d: 14500, discretionary_spend_7d: 2200, lending_upi_count_7d: 3, lending_upi_amount_7d: 9000, failed_autodebit_count: 1, utility_payment_delay_days: 5, gambling_spend_7d: 600, credit_utilization: 0.72, net_cashflow_7d: -1800 }
   },
   critical: {
     name: '🚨 High Risk',
     desc: 'Charged-off, debt settlement, recovery in progress',
-    values: { total_rec_late_fee: 120, recoveries: 2500, last_pymnt_amnt: 0, loan_amnt_div_instlmnt: 60, debt_settlement_flag: 1, loan_age: 48, total_rec_int: 3200, out_prncp: 12000, time_since_last_credit_pull: 8, time_since_last_payment: 12, int_rate_pct: 28.9, total_rec_prncp: 4000 }
+    values: { salary_delay_days: 8, savings_wow_delta_pct: -48, atm_withdrawal_count_7d: 12, atm_withdrawal_amount_7d: 36000, discretionary_spend_7d: 1100, lending_upi_count_7d: 8, lending_upi_amount_7d: 42000, failed_autodebit_count: 3, utility_payment_delay_days: 14, gambling_spend_7d: 2800, credit_utilization: 0.94, net_cashflow_7d: -8200 }
   }
 };
 
@@ -255,7 +254,7 @@ async function generatePDFReport(result, features) {
 }
 
 
-export default function ModelPredict() {
+export default function ModelPredict({ seedCustomer = null }) {
   const [features, setFeatures] = useState(() => {
     const init = {};
     FEATURE_FIELDS.forEach(f => { init[f.key] = f.default; });
@@ -271,8 +270,22 @@ export default function ModelPredict() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    getModelInfo().then(setModelInfo).catch(() => {});
+    const refresh = () => getModelInfo().then(setModelInfo).catch(() => {});
+    refresh();
+    const timer = setInterval(refresh, 20000);
+    return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!seedCustomer?.loan_features) return;
+    const merged = {};
+    FEATURE_FIELDS.forEach((f) => {
+      const incoming = seedCustomer.loan_features[f.key];
+      merged[f.key] = incoming !== undefined ? Number(incoming) : f.default;
+    });
+    setFeatures(merged);
+    setResult(null);
+  }, [seedCustomer]);
 
   const handlePreset = (key) => {
     setActivePreset(key);
@@ -281,7 +294,7 @@ export default function ModelPredict() {
     setResult(null);
   };
 
-  const handlePredict = async () => {
+  const handlePredict = useCallback(async () => {
     setLoading(true);
     try {
       const data = await predictRisk(features);
@@ -291,7 +304,11 @@ export default function ModelPredict() {
       setResult({ error: err.message || 'Prediction failed' });
     }
     setLoading(false);
-  };
+  }, [features]);
+
+  useEffect(() => {
+    handlePredict();
+  }, [handlePredict]);
 
   const updateFeature = (key, val) => {
     setFeatures(f => ({ ...f, [key]: Number(val) }));
@@ -486,11 +503,7 @@ export default function ModelPredict() {
 
           {loading && (
             <div className="card" style={{ padding: 60, textAlign: 'center' }}>
-              <div style={{ width: 64, height: 64, border: '3px solid rgba(0,212,255,0.15)', borderTopColor: '#00d4ff', borderRadius: '50%', animation: 'spinRing 800ms linear infinite', margin: '0 auto 24px' }}></div>
-              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, color: 'var(--text-primary)', marginBottom: 8 }}>Running AI Ensemble...</div>
-              <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: 'var(--text-secondary)' }}>
-                LightGBM → GRU → Isolation Forest → Meta-Learner
-              </div>
+              <Loader message="RUNNING AI ENSEMBLE..." />
             </div>
           )}
 

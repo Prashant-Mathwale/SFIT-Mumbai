@@ -80,6 +80,15 @@ class InterventionTriggerRequest(BaseModel):
     override_intervention: Optional[str] = None
 
 
+class InterventionRecordRequest(BaseModel):
+    customer_id: str
+    week_number: int
+    risk_score_at_trigger: float
+    intervention_type: str
+    channel: str
+    top_signal: str = ""
+
+
 class InterventionResponse(BaseModel):
     customer_id: str
     week_number: int
@@ -110,3 +119,18 @@ class OverviewMetrics(BaseModel):
     interventions_sent_today: int
     recovery_rate: float
     default_rate: float
+    total_portfolio: float = 16.5
+    high_risk_volume: float = 8.2
+    avoided_loss_cr: float = 0.0
+    avg_ttd_days: int = 14
+    portfolio_delta: str = "↑ ₹0.0 Cr this quarter"
+    at_risk_delta: str = "↓ 0% last month"
+    intervention_delta: str = "↑ 0% vs week 51"
+    recovery_delta: str = "↑ 0.0pp this mo"
+    accuracy_stat: float = 88.0
+    donut_data: List[Dict[str, Any]] = []
+    risk_velocity: List[Dict[str, Any]] = []
+    portfolio_exposure: List[Dict[str, Any]] = []
+    model_performance: List[Dict[str, Any]] = []
+    confidence_distribution: List[Dict[str, Any]] = []
+

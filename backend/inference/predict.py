@@ -26,47 +26,55 @@ sys.path.insert(0, ROOT)
 # ── GRU Model Architecture ─────────────────────────────────
 # Must exactly match the architecture in train_real_data.py
 class GRUModel(nn.Module):
-    """GRU model matching train_real_data.py architecture."""
+    """GRU model matching train_gru.py architecture."""
 
     def __init__(self, input_size, hidden1=64, hidden2=32, dropout=0.3):
         super().__init__()
-        self.gru = nn.GRU(input_size, hidden1, batch_first=True,
-                          dropout=dropout, num_layers=2)
-        self.fc1 = nn.Linear(hidden1, hidden2)
-        self.dropout = nn.Dropout(dropout)
-        self.fc2 = nn.Linear(hidden2, 1)
+        self.gru1 = nn.GRU(input_size=input_size, hidden_size=hidden1,
+                           batch_first=True)
+        self.gru2 = nn.GRU(input_size=hidden1, hidden_size=hidden2,
+                           batch_first=True)
+        self.fc1 = nn.Linear(hidden2, 16)
         self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+        self.fc2 = nn.Linear(16, 1)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        _, h = self.gru(x)
-        out = self.relu(self.fc1(h[-1]))
+        out, _ = self.gru1(x)
+        out, _ = self.gru2(out)
+        out = out[:, -1, :]
+        out = self.fc1(out)
+        out = self.relu(out)
         out = self.dropout(out)
-        return self.fc2(out).squeeze(-1)
+        out = self.fc2(out)
+        out = self.sigmoid(out)
+        return out
 
 
 class RiskPredictor:
     """Combined risk prediction using all 4 trained models."""
 
     FEATURE_COLS = [
-        "total_rec_late_fee", "recoveries", "last_pymnt_amnt",
-        "loan_amnt_div_instlmnt", "debt_settlement_flag", "loan_age",
-        "total_rec_int", "out_prncp", "time_since_last_credit_pull",
-        "time_since_last_payment", "int_rate%", "total_rec_prncp"
+        "salary_delay_days", "savings_wow_delta_pct", "atm_withdrawal_count_7d",
+        "atm_withdrawal_amount_7d", "discretionary_spend_7d", "lending_upi_count_7d",
+        "lending_upi_amount_7d", "failed_autodebit_count", "utility_payment_delay_days",
+        "gambling_spend_7d", "credit_utilization", "net_cashflow_7d"
     ]
 
     FEATURE_DESCRIPTIONS = {
-        "total_rec_late_fee": "total late fees received: ${value:.2f}",
-        "recoveries": "recovery amount: ${value:.2f}",
-        "last_pymnt_amnt": "last payment amount: ${value:.2f}",
-        "loan_amnt_div_instlmnt": "loan-to-installment ratio: {value:.2f}",
-        "debt_settlement_flag": "debt settlement flag: {value:.0f}",
-        "loan_age": "loan age: {value:.0f} months",
-        "total_rec_int": "total interest received: ${value:.2f}",
-        "out_prncp": "outstanding principal: ${value:.2f}",
-        "time_since_last_credit_pull": "time since last credit pull: {value:.0f} months",
-        "time_since_last_payment": "time since last payment: {value:.0f} months",
-        "int_rate%": "interest rate: {value:.1f}%",
-        "total_rec_prncp": "total principal received: ${value:.2f}",
+        "salary_delay_days": "salary delayed by {value:.0f} days",
+        "savings_wow_delta_pct": "savings changed {value:.1f}% week-over-week",
+        "atm_withdrawal_count_7d": "{value:.0f} ATM withdrawals in 7 days",
+        "atm_withdrawal_amount_7d": "ATM withdrawal amount: ₹{value:.0f}",
+        "discretionary_spend_7d": "discretionary spending: ₹{value:.0f}",
+        "lending_upi_count_7d": "{value:.0f} UPI transfers to lending apps",
+        "lending_upi_amount_7d": "lending app UPI amount: ₹{value:.0f}",
+        "failed_autodebit_count": "{value:.0f} failed auto-debits",
+        "utility_payment_delay_days": "utility payments delayed {value:.0f} days",
+        "gambling_spend_7d": "gambling spend: ₹{value:.0f}",
+        "credit_utilization": "credit utilization: {value:.1%}",
+        "net_cashflow_7d": "net cashflow: ₹{value:.0f}",
     }
 
     def __init__(self):
@@ -143,7 +151,7 @@ class RiskPredictor:
                       dtype=np.float32)
 
         # ── LightGBM ──
-        lgbm_prob = float(self.lgbm.predict_proba(x)[:, 1][0])
+        lgbm_prob = float(self.lgbm.predict(x)[0])
 
         # ── GRU (simulate sequence by repeating the feature vector) ──
         seq_len = self.config["gru"]["seq_len"]
@@ -151,14 +159,20 @@ class RiskPredictor:
         x_scaled = self.gru_scaler.transform(x_seq).reshape(1, seq_len, len(self.features))
         with torch.no_grad():
             seq_tensor = torch.FloatTensor(x_scaled).to(self.device)
-            gru_logit = float(self.gru(seq_tensor).cpu().numpy()[0])
-            gru_prob = 1.0 / (1.0 + np.exp(-gru_logit))  # sigmoid
+            gru_prob = float(self.gru(seq_tensor).cpu().numpy().flatten()[0])
 
-        # ── Isolation Forest ──
-        anomaly_flag = bool(self.iso_forest.predict(x)[0] == -1)
+        # ── Isolation Forest (uses 5 specific features) ──
+        iso_features = ["atm_withdrawal_amount_7d", "lending_upi_amount_7d",
+                        "net_cashflow_7d", "credit_utilization", "failed_autodebit_count"]
+        iso_indices = [self.features.index(f) for f in iso_features]
+        x_iso = x[:, iso_indices]
+        anomaly_flag = bool(self.iso_forest.predict(x_iso)[0] == -1)
 
-        # ── Ensemble (2 meta-features: lgbm, gru) ──
-        meta_x = np.array([[lgbm_prob, gru_prob]])
+        # ── Ensemble (5 meta-features) ──
+        c_util_idx = self.features.index("credit_utilization")
+        credit_utilization = x[0, c_util_idx]
+        # Assume latest week (52) and default/medium stress level (1) if single prediction
+        meta_x = np.array([[lgbm_prob, gru_prob, 52.0/52.0, 1.0/2.0, credit_utilization]])
         ensemble_prob = float(self.ensemble_meta.predict_proba(meta_x)[:, 1][0])
 
         # Anomaly escalation
@@ -190,18 +204,26 @@ class RiskPredictor:
             "all_shap": shap_result["all_drivers"],
             "shap_values": shap_result["shap_values"],
             "human_explanation": shap_result["human_explanation"],
+            "confidence": shap_result["confidence"]
         }
 
     def _compute_shap(self, x, lgbm_prob=0.0, gru_prob=0.0, ensemble_prob=0.0, anomaly_flag=False, risk_level="LOW"):
         """Compute SHAP values for a single sample."""
         try:
-            shap_vals = self.shap_explainer.shap_values(x)
-            if isinstance(shap_vals, list):
-                shap_vals = shap_vals[1] if len(shap_vals) > 1 else shap_vals[0]
+            raw_shap = self.shap_explainer.shap_values(x)
+            # CRITICAL: SHAP BUG FIX
+            if isinstance(raw_shap, list):
+                shap_vals = raw_shap[1] if len(raw_shap) > 1 else raw_shap[0]
+            else:
+                shap_vals = raw_shap
             shap_vals = shap_vals.flatten()
         except Exception as e:
             print(f"SHAP error: {e}")
             shap_vals = np.zeros(len(self.features))
+
+        # Confidence Calculation
+        confidence = 1.0 - np.var([lgbm_prob, gru_prob, ensemble_prob])
+        confidence = round(np.clip(confidence, 0.4, 0.99), 2)
 
         feature_contribs = []
         for i, fname in enumerate(self.features):
@@ -238,6 +260,7 @@ class RiskPredictor:
             "top_drivers": top_drivers,
             "all_drivers": feature_contribs,
             "human_explanation": explanation,
+            "confidence": confidence
         }
 
     # _generate_explanation is now handled by inference.ai_explain module

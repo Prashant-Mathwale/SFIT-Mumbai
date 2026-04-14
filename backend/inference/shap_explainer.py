@@ -106,44 +106,36 @@ class SHAPExplainer:
             idx = self.features.index(fname) if fname in self.features else -1
             val = feature_values[idx] if idx >= 0 else 0
 
-            if fname == "total_rec_prncp":
-                parts.append(f"total principal received is ${val:,.2f}")
-            elif fname == "total_rec_int":
-                parts.append(f"total interest received is ${val:,.2f}")
-            elif fname == "last_pymnt_amnt":
-                parts.append(f"last payment amount was ${val:,.2f}")
-            elif fname == "out_prncp":
-                if val > 0:
-                    parts.append(f"outstanding principal of ${val:,.2f}")
-                else:
-                    parts.append(f"no outstanding principal remaining")
-            elif fname == "loan_age":
-                parts.append(f"loan is {int(val)} months old")
-            elif fname == "time_since_last_payment":
-                parts.append(f"last payment was {int(val)} months ago")
-            elif fname == "time_since_last_credit_pull":
-                parts.append(f"last credit pull was {int(val)} months ago")
-            elif fname == "int_rate%":
-                parts.append(f"interest rate is {val:.1f}%")
-            elif fname == "total_rec_late_fee":
-                if val > 0:
-                    parts.append(f"${val:,.2f} in late fees")
-                else:
-                    parts.append(f"no late fees recorded")
-            elif fname == "recoveries":
-                if val > 0:
-                    parts.append(f"${val:,.2f} in post-default recoveries")
-                else:
-                    parts.append(f"no recovery amounts")
-            elif fname == "debt_settlement_flag":
-                if val > 0:
-                    parts.append(f"debt settlement is active")
-                else:
-                    parts.append(f"no debt settlement flag")
-            elif fname == "loan_amnt_div_instlmnt":
-                parts.append(f"loan-to-installment ratio is {val:.1f}")
+            if fname == "salary_delay_days":
+                parts.append(f"salary was delayed by {int(val)} days")
+            elif fname == "savings_wow_delta_pct":
+                direction = "dropped" if val < 0 else "grew"
+                parts.append(f"savings {direction} by {abs(val):.1f}% WoW")
+            elif fname == "credit_utilization":
+                parts.append(f"credit utilization reached {val * 100:.1f}%")
+            elif fname == "failed_autodebit_count":
+                parts.append(f"{int(val)} failed auto-debits occurred")
+            elif fname == "gambling_spend_7d":
+                parts.append(f"gambling spend was ₹{val:,.2f} over 7 days")
+            elif fname == "net_cashflow_trend_slope":
+                trend = "negative" if val < 0 else "positive"
+                parts.append(f"cashflow trend is {trend}")
+            elif fname == "weekend_spend_ratio":
+                parts.append(f"weekend spending accounts for {val * 100:.1f}% of discretionary outflow")
+            elif fname == "delta_utilization":
+                parts.append(f"credit utilization increased by {(val * 100):.1f}% recently")
+            elif fname == "delta_cashflow":
+                parts.append(f"recent net cashflow changed by ₹{val:,.2f}")
+            elif fname == "utility_payment_delay_days":
+                parts.append(f"utility bills were delayed by {int(val)} days")
+            elif fname == "lending_upi_count_7d":
+                parts.append(f"borrowed {int(val)} times via UPI lending apps")
+            elif fname == "atm_withdrawal_count_7d":
+                parts.append(f"{int(val)} ATM withdrawals were made")
+            elif fname == "stress_score_interaction":
+                parts.append(f"combined stress score is significantly elevated")
             else:
-                parts.append(f"{fname} value is {val:.2f}")
+                parts.append(f"{fname} is {val:.2f}")
 
         if not parts:
             return "No significant risk drivers identified for this loan."

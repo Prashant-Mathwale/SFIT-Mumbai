@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { getInterventionLog, getCustomerDetail, triggerIntervention } from '../api/client';
+import { getInterventionLog, getCustomerDetail, triggerIntervention, recordIntervention } from '../api/client';
+import Loader from './ui/Loader';
 
 /* ═══════════════════════════════════════════
    OUTREACH PANEL — Intervention Hub v2.0
@@ -24,47 +25,72 @@ function AnimatedNumber({ target, duration = 1200, color = 'var(--text-primary)'
   return <span style={{ color }}>{Math.round(val)}</span>;
 }
 
-export default function OutreachPanel() {
+export default function OutreachPanel({ seedCustomers = [] }) {
   const [queue, setQueue] = useState([]);
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
   const [channel, setChannel] = useState('SMS');
   const [message, setMessage] = useState('');
+  const [interventionObj, setInterventionObj] = useState('');
+  const [complianceApproved, setComplianceApproved] = useState(true);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQueue, setSearchQueue] = useState('');
 
-  useEffect(() => {
-    getInterventionLog(1, 50).then(data => {
-      const pending = (data || []).filter(d => d.status === 'SENT' || d.status === 'DELIVERED' || d.outcome === 'PENDING');
-      setQueue(pending.length > 0 ? pending : (data || []).slice(0, 24));
+  const buildQueueFromSeeds = useCallback((rows = []) => {
+    if (!Array.isArray(rows) || rows.length === 0) return [];
+    return rows
+      .filter((c) => c?.intervention_eligible !== false)
+      .slice(0, 24)
+      .map((c) => ({
+      customer_id: c.customer_id,
+      week_number: 52,
+      risk_score_at_trigger: c.risk_score || 0,
+      intervention_type: 'PROACTIVE_OUTREACH',
+      channel: 'SMS',
+      status: 'PENDING',
+      outcome: 'PENDING',
+      top_signal: c.top_signal || ''
+    }));
+  }, []);
+
+  const refreshQueue = useCallback(() => {
+    getInterventionLog(1, 80).then(data => {
+      const rows = Array.isArray(data) ? data : [];
+      const pending = rows.filter(d => d.status === 'SENT' || d.status === 'DELIVERED' || d.outcome === 'PENDING');
+      const fallback = buildQueueFromSeeds(seedCustomers);
+      setQueue(pending.length > 0 ? pending : (rows.length > 0 ? rows.slice(0, 24) : fallback));
       setLoading(false);
     }).catch(() => {
-      const demo = Array.from({ length: 24 }, (_, i) => ({
-        customer_id: `CUS-${10001 + i * 3}`,
-        week_number: 52,
-        risk_score_at_trigger: 0.5 + Math.random() * 0.4,
-        intervention_type: ['PAYMENT_HOLIDAY', 'SMS_OUTREACH', 'RM_CALL', 'FINANCIAL_COUNSELING'][i % 4],
-        channel: ['SMS', 'EMAIL', 'CALL', 'APP'][i % 4],
-        status: ['SENT', 'DELIVERED', 'SENT', 'SENT'][i % 4],
-        outcome: 'PENDING',
-        top_signal: ['salary_delay_days', 'lending_upi_count_7d', 'credit_utilization'][i % 3]
-      }));
-      setQueue(demo);
+      setQueue(buildQueueFromSeeds(seedCustomers));
       setLoading(false);
     });
-  }, []);
+  }, [buildQueueFromSeeds, seedCustomers]);
+
+  useEffect(() => {
+    setLoading(true);
+    refreshQueue();
+    const timer = setInterval(refreshQueue, 20000);
+    return () => clearInterval(timer);
+  }, [refreshQueue]);
 
   const handleSelect = async (item) => {
     setSelected(item);
     setSent(false);
-    setMessage('');
+    setMessage('Loading authorized outreach message from intervention AI...');
+    setComplianceApproved(true);
     try {
+      const res = await triggerIntervention(item.customer_id, item.week_number || 52);
+      setMessage(res.outreach_message || 'Please reach out to us regarding your account.');
+      setChannel(res.chosen_channel || 'SMS');
+      setInterventionObj(res.chosen_intervention?.replace(/_/g, ' ') || 'Payment Restructuring');
+      if (res.compliance_approved !== undefined) {
+          setComplianceApproved(res.compliance_approved);
+      }
       const d = await getCustomerDetail(item.customer_id);
       setDetail(d);
-      setMessage(`We noticed some changes in your payment patterns. We'd like to help you explore flexible options that work for you. Please reach out to us anytime.`);
     } catch {
       setDetail(null);
       setMessage(`We care about your financial wellness. Our team is here to help with flexible repayment options. Please reach out to us.`);
@@ -74,13 +100,25 @@ export default function OutreachPanel() {
   const handleSend = async () => {
     if (!selected) return;
     setSending(true);
-    try { await triggerIntervention(selected.customer_id, selected.week_number || 52); } catch {}
-    setTimeout(() => {
+    
+    try {
+      await recordIntervention({
+        customer_id: selected.customer_id,
+        week_number: selected.week_number || 52,
+        risk_score_at_trigger: selected.risk_score_at_trigger,
+        intervention_type: interventionObj.replace(/ /g, '_').toUpperCase(),
+        channel: channel,
+        top_signal: selected.top_signal || ""
+      });
+      
       setSending(false);
       setSent(true);
       addToast(`Intervention dispatched for ${selected.customer_id}`, 'success');
       setQueue(q => q.map(i => i.customer_id === selected.customer_id ? { ...i, status: 'SENT', outcome: 'PENDING' } : i));
-    }, 1500);
+    } catch (err) {
+      setSending(false);
+      addToast("Failed to record intervention. Please try again.", "error");
+    }
   };
 
   const addToast = (text, type = 'success') => {
@@ -94,10 +132,15 @@ export default function OutreachPanel() {
   );
 
   const riskColor = (s) => s >= 0.70 ? 'var(--accent-red)' : s >= 0.40 ? 'var(--accent-orange)' : 'var(--accent-green)';
+  const detailView = detail?.scored_details || detail || {};
+  const accountView = detail?.account_info || {};
 
   const pendingCount = queue.filter(q => q.outcome === 'PENDING' || q.status === 'SENT').length;
   const sentCount = queue.filter(q => q.status === 'SENT' || q.status === 'DELIVERED').length;
   const criticalCount = queue.filter(q => q.risk_score_at_trigger >= 0.70).length;
+  const resolvedCount = queue.filter(q => q.outcome === 'RECOVERED').length;
+
+  if (loading) return <Loader message="ACCESSING COMMUNICATIONS GRID..." />;
 
   return (
     <div>
@@ -133,7 +176,7 @@ export default function OutreachPanel() {
           <div className="kpi-strip-label">Pending High</div>
         </div>
         <div className="kpi-strip-tile">
-          <div className="kpi-strip-value"><AnimatedNumber target={0} color="var(--accent-cyan)" /></div>
+          <div className="kpi-strip-value"><AnimatedNumber target={resolvedCount} color="var(--accent-cyan)" /></div>
           <div className="kpi-strip-label">Resolved</div>
         </div>
         <div className="kpi-strip-tile">
@@ -198,31 +241,30 @@ export default function OutreachPanel() {
         <div className="card" style={{ animation: 'fadeSlideLeft 500ms 100ms ease both', padding: 32 }}>
           {!selected ? (
             <div className="empty-state">
-              <svg viewBox="0 0 24 24" fill="rgba(255,255,255,0.06)"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-              <div className="title">Select a customer from the queue</div>
-              <div className="subtitle">The AI-generated message preview will appear here</div>
+              <span style={{ fontSize: 40, display: 'block', marginBottom: 16 }}>✉️</span>
+              Select an alert from the queue to review AI-generated outreach.
             </div>
           ) : (
             <>
               {/* Customer Header */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
                 <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-cyan))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono', fontSize: 14, color: 'white', fontWeight: 500 }}>
-                  {(detail?.name || 'CU').slice(0, 2).toUpperCase()}
+                  {(detailView?.name || accountView?.name || 'CU').slice(0, 2).toUpperCase()}
                 </div>
                 <div>
-                  <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 20, color: 'var(--text-primary)' }}>{detail?.name || selected.customer_id}</div>
+                  <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 20, color: 'var(--text-primary)' }}>{detailView?.name || accountView?.name || selected.customer_id}</div>
                   <div style={{ fontFamily: 'DM Mono', fontSize: 13, color: 'var(--text-secondary)' }}>{selected.customer_id}</div>
                 </div>
-                <span className={`risk-badge ${(detail?.risk_level || 'MEDIUM').toLowerCase()}`} style={{ marginLeft: 'auto' }}>
-                  {detail?.risk_level || 'MEDIUM'}
+                <span className={`risk-badge ${(detailView?.risk_level || 'MEDIUM').toLowerCase()}`} style={{ marginLeft: 'auto' }}>
+                  {detailView?.risk_level || 'MEDIUM'}
                 </span>
               </div>
 
               {detail && (
                 <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
-                  {detail.city && <span className="pill" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 100, padding: '4px 10px', fontFamily: 'DM Sans', fontSize: 12, color: 'var(--text-secondary)' }}>{detail.city}</span>}
-                  {detail.occupation && <span className="pill" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 100, padding: '4px 10px', fontFamily: 'DM Sans', fontSize: 12, color: 'var(--text-secondary)' }}>{detail.occupation}</span>}
-                  {detail.product_type && <span className="pill" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 100, padding: '4px 10px', fontFamily: 'DM Sans', fontSize: 12, color: 'var(--text-secondary)' }}>{detail.product_type}</span>}
+                  {(detailView?.city || accountView?.city) && <span className="pill" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 100, padding: '4px 10px', fontFamily: 'DM Sans', fontSize: 12, color: 'var(--text-secondary)' }}>{detailView?.city || accountView?.city}</span>}
+                  {(detailView?.occupation || accountView?.occupation) && <span className="pill" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 100, padding: '4px 10px', fontFamily: 'DM Sans', fontSize: 12, color: 'var(--text-secondary)' }}>{detailView?.occupation || accountView?.occupation}</span>}
+                  {(detailView?.product_type || accountView?.product_type) && <span className="pill" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 100, padding: '4px 10px', fontFamily: 'DM Sans', fontSize: 12, color: 'var(--text-secondary)' }}>{detailView?.product_type || accountView?.product_type}</span>}
                 </div>
               )}
 
@@ -248,18 +290,11 @@ export default function OutreachPanel() {
 
               {/* Compliance Badges */}
               <div className="compliance-row">
-                <div className="compliance-badge">
-                  <span className="icon">✓</span>
+                <div className={`compliance-badge ${complianceApproved ? 'cyan' : 'red'}`}>
+                  <span className="icon">{complianceApproved ? '🛡' : '⚠'}</span>
                   <div>
-                    <div className="badge-title">Policy Match</div>
-                    <div className="badge-subtitle">Pre-delinquency empathetic outreach (Tier 1)</div>
-                  </div>
-                </div>
-                <div className="compliance-badge cyan">
-                  <span className="icon">🛡</span>
-                  <div>
-                    <div className="badge-title">Compliance Approved</div>
-                    <div className="badge-subtitle">Supportive · Non-aggressive · Regulatory-compliant</div>
+                    <div className="badge-title">{complianceApproved ? 'Policy Approved' : 'Compliance Warning'}</div>
+                    <div className="badge-subtitle">{complianceApproved ? 'Supportive · Regulatory-compliant' : 'Message exceeds length or tone constraints'}</div>
                   </div>
                 </div>
               </div>
