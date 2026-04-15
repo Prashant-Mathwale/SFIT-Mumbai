@@ -38,6 +38,7 @@ venv.bak/
 *.log
 *.sqlite3
 *.db
+!backend/data/praeventix_cache.db
 archive*
 
 # IDE / Cursor
