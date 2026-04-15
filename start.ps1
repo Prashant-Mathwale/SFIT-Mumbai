@@ -17,12 +17,16 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$RO
 # 2. Wait for Backend to initialize
 Start-Sleep -Seconds 3
 
-# 3. Start Frontend Dashboard
-Write-Host "  [2/2] Starting React Dashboard on port 5173..." -ForegroundColor Yellow
+# 2. Start Frontend Dashboard
+Write-Host "  [2/3] Starting React Dashboard on port 5173..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$ROOT\frontend'; Write-Host 'Frontend starting...' -ForegroundColor Green; npm run dev"
 
+# 3. Start Real-Time Simulation Engine
+Write-Host "  [3/3] Starting Simulation Engine (2s flags)..." -ForegroundColor Yellow
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$ROOT\backend'; Write-Host 'Simulation Engine starting...' -ForegroundColor Green; python run_simulation_stream.py"
+
 Write-Host ""
-Write-Host "  ✅ Full Stack Launched!" -ForegroundColor Green
+Write-Host "  ✅ Real-Time EWS Stack Launched!" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Dashboard : http://localhost:5173" -ForegroundColor White
 Write-Host "  API       : http://localhost:8000" -ForegroundColor White

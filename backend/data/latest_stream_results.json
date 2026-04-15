@@ -1,0 +1,112 @@
+[
+  {
+    "customer_id": "SIM-0409",
+    "name": "Vikram Verma",
+    "city": "Lucknow",
+    "timestamp": "02:36:35",
+    "risk_score": 0.7401,
+    "risk_level": "HIGH",
+    "anomaly": false,
+    "explanation": "This loan presents significant default risk with an ensemble score of 74.0%. The LightGBM model (62.1%) and GRU neural network (9.8%) show notable divergence, suggesting complex temporal patterns in the borrower's behavior. The primary risk drivers are: net cashflow 7d, credit utilization, weekend spend ratio. Immediate review and proactive outreach are recommended.",
+    "latency_ms": 23.54
+  },
+  {
+    "customer_id": "SIM-0408",
+    "name": "Amit Bose",
+    "city": "Chandigarh",
+    "timestamp": "02:36:33",
+    "risk_score": 0.9278,
+    "risk_level": "HIGH",
+    "anomaly": true,
+    "explanation": "This loan presents significant default risk with an ensemble score of 92.8%. The LightGBM model (96.1%) and GRU neural network (11.6%) show notable divergence, suggesting complex temporal patterns in the borrower's behavior. The primary risk drivers are: net cashflow 7d, salary delay days, failed autodebit count. The Isolation Forest anomaly detector has flagged this loan's feature pattern as statistically unusual, suggesting behavioral deviation from the general population. Immediate review and proactive outreach are recommended.",
+    "latency_ms": 20.46
+  },
+  {
+    "customer_id": "SIM-0407",
+    "name": "Priya Joshi",
+    "city": "Mumbai",
+    "timestamp": "02:36:31",
+    "risk_score": 0.3039,
+    "risk_level": "LOW",
+    "anomaly": false,
+    "explanation": "This loan is performing well with a low ensemble score of 30.4%. The LightGBM model (28.2%) and GRU neural network (52.0%) show notable divergence, suggesting complex temporal patterns in the borrower's behavior. The primary risk drivers are: net cashflow trend slope, discretionary spend 7d. Mitigating factors include favorable net cashflow 7d.",
+    "latency_ms": 20.96
+  },
+  {
+    "customer_id": "SIM-0406",
+    "name": "Nisha Sharma",
+    "city": "Surat",
+    "timestamp": "02:36:29",
+    "risk_score": 0.1646,
+    "risk_level": "LOW",
+    "anomaly": false,
+    "explanation": "This loan is performing well with a low ensemble score of 16.5%. The LightGBM model (13.6%) and GRU neural network (51.9%) show notable divergence, suggesting complex temporal patterns in the borrower's behavior. The primary risk drivers are: discretionary spend 7d. Mitigating factors include favorable net cashflow 7d and credit utilization.",
+    "latency_ms": 21.71
+  },
+  {
+    "customer_id": "SIM-0405",
+    "name": "Nisha Malhotra",
+    "city": "Nagpur",
+    "timestamp": "02:36:27",
+    "risk_score": 0.2441,
+    "risk_level": "LOW",
+    "anomaly": false,
+    "explanation": "This loan is performing well with a low ensemble score of 24.4%. The LightGBM model (21.5%) and GRU neural network (51.9%) show notable divergence, suggesting complex temporal patterns in the borrower's behavior. The primary risk drivers are: discretionary spend 7d, net cashflow trend slope. Mitigating factors include favorable net cashflow 7d.",
+    "latency_ms": 21.28
+  },
+  {
+    "customer_id": "SIM-0404",
+    "name": "Sneha Malhotra",
+    "city": "Ahmedabad",
+    "timestamp": "02:36:25",
+    "risk_score": 0.928,
+    "risk_level": "HIGH",
+    "anomaly": true,
+    "explanation": "This loan presents significant default risk with an ensemble score of 92.8%. The LightGBM model (94.1%) and GRU neural network (11.8%) show notable divergence, suggesting complex temporal patterns in the borrower's behavior. The primary risk drivers are: net cashflow 7d, salary delay days, credit utilization. The Isolation Forest anomaly detector has flagged this loan's feature pattern as statistically unusual, suggesting behavioral deviation from the general population. Immediate review and proactive outreach are recommended.",
+    "latency_ms": 19.86
+  },
+  {
+    "customer_id": "SIM-0403",
+    "name": "Anjali Kumar",
+    "city": "Hyderabad",
+    "timestamp": "02:36:23",
+    "risk_score": 0.4447,
+    "risk_level": "MEDIUM",
+    "anomaly": false,
+    "explanation": "This loan shows moderate risk indicators with an ensemble score of 44.5%, warranting closer monitoring. The LightGBM model (35.6%) and GRU neural network (53.7%) show notable divergence, suggesting complex temporal patterns in the borrower's behavior. The primary risk drivers are: credit utilization, net cashflow trend slope. Mitigating factors include favorable net cashflow 7d. Continued monitoring with scheduled follow-up is advised.",
+    "latency_ms": 40.79
+  },
+  {
+    "customer_id": "SIM-0402",
+    "name": "Kavita Gupta",
+    "city": "Ahmedabad",
+    "timestamp": "02:36:21",
+    "risk_score": 0.5842,
+    "risk_level": "MEDIUM",
+    "anomaly": false,
+    "explanation": "This loan shows moderate risk indicators with an ensemble score of 58.4%, warranting closer monitoring. Both the LightGBM (48.2%) and GRU (53.5%) models agree on the risk assessment, reinforcing confidence in this prediction. The primary risk drivers are: credit utilization, discretionary spend 7d, net cashflow trend slope. Continued monitoring with scheduled follow-up is advised.",
+    "latency_ms": 25.59
+  },
+  {
+    "customer_id": "SIM-0401",
+    "name": "Amit Nair",
+    "city": "Surat",
+    "timestamp": "02:36:19",
+    "risk_score": 0.244,
+    "risk_level": "LOW",
+    "anomaly": false,
+    "explanation": "This loan is performing well with a low ensemble score of 24.4%. The LightGBM model (21.7%) and GRU neural network (52.1%) show notable divergence, suggesting complex temporal patterns in the borrower's behavior. The primary risk drivers are: discretionary spend 7d, net cashflow trend slope. Mitigating factors include favorable net cashflow 7d.",
+    "latency_ms": 59.76
+  },
+  {
+    "customer_id": "SIM-0400",
+    "name": "Sneha Desai",
+    "city": "Lucknow",
+    "timestamp": "02:36:17",
+    "risk_score": 0.6278,
+    "risk_level": "MEDIUM",
+    "anomaly": false,
+    "explanation": "This loan shows moderate risk indicators with an ensemble score of 62.8%, warranting closer monitoring. The LightGBM model (49.9%) and GRU neural network (8.6%) show notable divergence, suggesting complex temporal patterns in the borrower's behavior. The primary risk drivers are: net cashflow 7d, credit utilization. Mitigating factors include favorable failed autodebit count. Continued monitoring with scheduled follow-up is advised.",
+    "latency_ms": 30.44
+  }
+]

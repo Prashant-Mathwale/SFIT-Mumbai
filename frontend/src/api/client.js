@@ -99,6 +99,11 @@ export async function predictBatch(loans) {
   return res.data;
 }
 
+export async function getLatestStream() {
+  const res = await api.get('/api/stream/latest');
+  return res.data;
+}
+
 // ── Landing Page Metrics ──
 export async function getLandingMetrics() {
   const res = await api.get('/api/metrics/landing');

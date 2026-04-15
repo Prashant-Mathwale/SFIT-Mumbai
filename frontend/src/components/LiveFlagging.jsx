@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { getAtRiskCustomers, getCustomerDetail, getCustomerHistory, explainCustomer, getCustomerTimeline, getAbilityWillingness } from '../api/client';
+import { getAtRiskCustomers, getCustomerDetail, getCustomerHistory, explainCustomer, getCustomerTimeline, getAbilityWillingness, getLatestStream } from '../api/client';
 import Loader from './ui/Loader';
 
 /* ═══════════════════════════════════════════
@@ -771,6 +771,7 @@ export default function LiveFlagging() {
   const [liveOn, setLiveOn] = useState(true);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [streamPanelOpen, setStreamPanelOpen] = useState(false);
+  const [streamData, setStreamData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [expandedSignals, setExpandedSignals] = useState({});
@@ -808,15 +809,19 @@ export default function LiveFlagging() {
   }, [filter, debouncedSearch]);
 
   useEffect(() => {
-    setLoading(true);
-    fetchData();
-  }, [fetchData]);
+    // We no longer fetch static 'at-risk' data for this 'Pure Simulation' view.
+    // Instead, we wait for the 2-second stream to begin.
+    setLoading(false);
+  }, []);
   useEffect(() => {
-    if (liveOn) {
-      const interval = setInterval(fetchData, 10000);
+    if (liveOn || streamPanelOpen) {
+      const interval = setInterval(() => {
+        fetchData();
+        getLatestStream().then(data => setStreamData(data || []));
+      }, 2000);
       return () => clearInterval(interval);
     }
-  }, [liveOn, fetchData]);
+  }, [liveOn, streamPanelOpen, fetchData]);
 
   useEffect(() => {
     const onVisible = () => {
@@ -826,9 +831,19 @@ export default function LiveFlagging() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [fetchData]);
 
-  const filtered = customers
-    .filter(c => (filter === 'All' ? true : c.risk_level === filter.toUpperCase()))
-    .sort((a, b) => b.risk_score - a.risk_score);
+  // For 'Pure Simulation' mode: the table ONLY contains results from the live stream.
+  // Static training data is excluded to match the terminal behavior.
+  const allInTable = streamData.map(s => ({...s, isLive: true}));
+  
+  const filtered = allInTable
+    .filter(c => {
+      const matchesFilter = filter === 'All' ? true : c.risk_level === filter.toUpperCase();
+      const matchesSearch = !debouncedSearch || 
+                           c.customer_id.toLowerCase().includes(debouncedSearch.toLowerCase()) || 
+                           c.name.toLowerCase().includes(debouncedSearch.toLowerCase());
+      return matchesFilter && matchesSearch;
+    });
+    // No sorting needed because streamData is already ordered by timestamp (newest first)
 
   const riskColor = (score) => score >= 0.70 ? 'var(--accent-red)' : score >= 0.40 ? 'var(--accent-orange)' : 'var(--accent-green)';
   const riskColorHex = (score) => score >= 0.70 ? '#ff4757' : score >= 0.40 ? '#ff6b35' : '#06ffa5';
@@ -841,8 +856,8 @@ export default function LiveFlagging() {
     <div>
       <div className="page-header" style={{ animation: 'fadeSlideDown 500ms ease' }}>
         <div>
-          <h1>Live Risk Flagging</h1>
-          <p className="subtitle">Top at-risk customers — auto-refreshes every 10 seconds</p>
+          <h1>Live Simulation Monitor</h1>
+          <p className="subtitle">Real-time risk identifying — fetching new data every 2 seconds from the simulation stream</p>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button className={`btn-stream ${streamPanelOpen ? 'active' : ''}`} onClick={() => setStreamPanelOpen(true)}>
@@ -865,24 +880,24 @@ export default function LiveFlagging() {
             </div>
             <p className="subtitle" style={{ marginBottom: 20 }}>Real-time monitoring of outgoing UPI & ATM activity</p>
             <div className="stream-feed" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {[
-                { time: '14:22:01', id: 'TXN-9012', amt: '₹4,200', type: 'ATM Withdrawal', risk: 'HIGH' },
-                { time: '14:21:45', id: 'TXN-9011', amt: '₹12,400', type: 'UPI to LendingApp', risk: 'MEDIUM' },
-                { time: '14:21:30', id: 'TXN-9010', amt: '₹850', type: 'Merchant Pay', risk: 'LOW' },
-                { time: '14:21:12', id: 'TXN-9009', amt: '₹1,200', type: 'P2P Transfer', risk: 'LOW' },
-                { time: '14:20:55', id: 'TXN-9008', amt: '₹6,500', type: 'ATM Withdrawal', risk: 'HIGH' },
-              ].map((t, i) => (
+              {streamData.length > 0 ? streamData.map((t, i) => (
                 <div key={i} className="kpi-strip-tile" style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', animation: `fadeSlideLeft 400ms ${i * 100}ms both` }}>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{t.type}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.id} • {t.time}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{t.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.customer_id} • {t.timestamp}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: t.risk === 'HIGH' ? 'var(--accent-red)' : 'var(--text-primary)' }}>{t.amt}</div>
-                    <div style={{ fontSize: 10, color: t.risk === 'HIGH' ? 'var(--accent-red)' : 'var(--text-muted)' }}>{t.risk} RISK</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: t.risk_level === 'HIGH' ? 'var(--accent-red)' : 'var(--text-primary)' }}>{(t.risk_score * 100).toFixed(1)}%</div>
+                    <div style={{ fontSize: 10, color: t.risk_level === 'HIGH' ? 'var(--accent-red)' : 'var(--text-muted)' }}>{t.risk_level} RISK</div>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <div style={{ textAlign: 'center', padding: '20px 0', opacity: 0.5 }}>
+                  No simulation stream detected. 
+                  <br/>
+                  Run: <code>python backend/run_simulation_stream.py</code>
+                </div>
+              )}
               <div style={{ textAlign: 'center', marginTop: 20 }}>
                 <div className="spinner" style={{ width: 16, height: 16, borderColor: 'var(--accent-cyan)', borderTopColor: 'transparent' }}></div>
                 <div style={{ fontSize: 10, color: 'var(--accent-cyan)', marginTop: 8, letterSpacing: 2 }}>WATCHING STREAM...</div>
@@ -939,8 +954,12 @@ export default function LiveFlagging() {
                 <tr key={i}><td colSpan="8"><div className="shimmer" style={{ height: 20, margin: '8px 0' }}></div></td></tr>
               )) : filtered.slice((page - 1) * limit, page * limit).map((c, i) => (
                 <tr key={c.customer_id}
-                  className={`risk-row ${c.risk_level?.toLowerCase()}-risk ${c.risk_level === 'HIGH' ? 'high-priority' : ''} ${selectedRows.includes(c.customer_id) ? 'selected' : ''}`}
-                  style={{ animation: `fadeSlideUp 300ms ease ${Math.min(i, 8) * 60}ms both` }}>
+                  className={`risk-row ${c.risk_level?.toLowerCase()}-risk ${c.risk_level === 'HIGH' ? 'high-priority' : ''} ${selectedRows.includes(c.customer_id) ? 'selected' : ''} ${c.isLive ? 'live-simulation-row' : ''}`}
+                  style={{ 
+                    animation: `fadeSlideUp 300ms ease ${Math.min(i, 8) * 60}ms both`,
+                    borderLeft: c.isLive ? '4px solid var(--accent-cyan)' : undefined,
+                    background: c.isLive ? 'rgba(0, 212, 255, 0.05)' : undefined
+                  }}>
                   <td>
                     <input
                       type="checkbox"
@@ -950,7 +969,10 @@ export default function LiveFlagging() {
                     />
                   </td>
                   <td>
-                    <div className="td-id">{c.customer_id}</div>
+                    <div className="td-id">
+                      {c.customer_id}
+                      {c.isLive && <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 4px', borderRadius: 4, background: 'var(--accent-cyan)', color: '#0a0a0f', fontWeight: 800 }}>LIVE</span>}
+                    </div>
                     <div className="td-name">{c.name || ''}</div>
                   </td>
                   <td>

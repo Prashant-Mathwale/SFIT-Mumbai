@@ -597,6 +597,21 @@ async def predict_batch(loans: List[PredictRequest]):
     return {"predictions": results, "count": len(results)}
 
 
+# ── NEW: Live Simulation Stream ───────────────────────────────
+
+@app.get("/api/stream/latest")
+async def get_latest_stream():
+    """Fetch the latest flags from the background simulation stream."""
+    path = os.path.join(DATA_DIR, "latest_stream_results.json")
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
 # ── Existing Customer-Based Routes ────────────────────────────
 
 @app.get("/api/customers/at-risk", response_model=List[CustomerRiskSummary])
@@ -745,10 +760,52 @@ async def get_at_risk_customers(
 
 
 @app.get("/api/customers/{customer_id}")
-async def get_customer_detail(
-    customer_id: str,
-):
+async def get_customer_detail(customer_id: str):
     ensure_data_fresh()
+    
+    # ── Handle Simulation Stream IDs ──
+    if customer_id.startswith("SIM-"):
+        path = os.path.join(DATA_DIR, "latest_stream_results.json")
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                stream_data = json.load(f)
+                for item in stream_data:
+                    if item["customer_id"] == customer_id:
+                        return {
+                            "customer_id": item["customer_id"],
+                            "account_info": {
+                                "name": item["name"],
+                                "age": 35, # Placeholder for SIM
+                                "city": item["city"],
+                                "occupation": "Simulated Profile",
+                                "product_type": "Personal Loan (SIM)"
+                            },
+                            "financial_profile": {
+                                "monthly_salary": 50000.0,
+                                "credit_score": 720,
+                                "loan_amount": 200000.0,
+                                "emi_amount": 12000.0,
+                                "credit_limit": 500000.0
+                            },
+                            "current_behavior": {
+                                "week_number": 52,
+                                "stress_level": 7 if item["risk_level"] == "HIGH" else 2,
+                                "salary_delay_days": 2.0,
+                                "credit_utilization": 0.45,
+                                "risk_score": item["risk_score"]
+                            },
+                            "intervention_eligible": True,
+                            "scored_details": {
+                                "customer_id": item["customer_id"],
+                                "name": item["name"],
+                                # Include fields needed for Modal's SHAP/narrative display
+                                "ensemble_prob": item["risk_score"],
+                                "risk_level": item["risk_level"],
+                                "human_explanation": item["explanation"],
+                                "anomaly_flag": item["anomaly"]
+                            }
+                        }
+
     if "scored" in data and data["scored"]:
         for c in data["scored"]:
             if c["customer_id"] == customer_id:
