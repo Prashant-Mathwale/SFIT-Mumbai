@@ -64,6 +64,10 @@ th.txt
 *.tmp
 *.temp
 *.bak
+*-wal
+*-shm
+*.db-wal
+*.db-shm
 
 # OS generated files
 .DS_Store

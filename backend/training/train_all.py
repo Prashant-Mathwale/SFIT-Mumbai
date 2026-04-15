@@ -29,7 +29,7 @@ def run_script(script_path, description):
 def main():
     print("=" * 70)
     print("  MASTER TRAINING PIPELINE")
-    print("  Pre-Delinquency Intervention Engine - Team Markoblitz")
+    print("  Pre-Delinquency Intervention Engine - Team Code Atlantis")
     print("=" * 70)
 
     scripts = [

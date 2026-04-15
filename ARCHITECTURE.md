@@ -1,262 +1,255 @@
-# 🏛️ Praeventix — Technical Architecture
+# Praeventix Architecture
 
-> Deep technical documentation for the Pre-Delinquency Intervention Engine.
+This document describes the implemented architecture in the current repository state.
 
----
+## High-Level System
 
-## System Overview
+Praeventix is a full-stack risk operations system with four major runtime layers:
 
-Praeventix is a **4-layer AI pipeline** that processes 2,000 customer profiles across 52 weeks of behavioral data, trains a multi-model ensemble, and delivers risk intelligence through a premium dashboard.
+1. Data + cache layer (`backend/data`, SQLite cache in API process)
+2. ML inference layer (`backend/inference`)
+3. Intervention decision layer (`backend/agent`)
+4. API + dashboard layer (`backend/api`, `frontend/src`)
 
-```
-Raw Transactions (380K+)
-        │
-        ▼
-┌─────────────────────┐
-│  Feature Engineering │  12 behavioral signals per customer-week
-│  (104,000 rows)     │  Converts raw txns → weekly features
-└────────┬────────────┘
-         │
-         ▼
-┌─────────────────────┐
-│  ML Risk Scoring    │  LightGBM + GRU + Ensemble + IsoForest
-│  (5-fold CV)        │  AUC-optimized, SHAP-explainable
-└────────┬────────────┘
-         │
-         ▼
-┌─────────────────────┐
-│  Agentic Decisions  │  LangGraph agent with policy rules
-│  (LLM + Rules)      │  Compliance-checked interventions
-└────────┬────────────┘
-         │
-         ▼
-┌─────────────────────┐
-│  FastAPI REST API    │  JWT auth, rate limiting, CORS
-│  (9 endpoints)      │  Serves dashboard + external systems
-└────────┬────────────┘
-         │
-         ▼
-┌─────────────────────┐
-│  React Dashboard    │  4-tab premium UI
-│  (Vite + Recharts)  │  Glassmorphic dark theme
-└─────────────────────┘
+Core path:
+
+```text
+Weekly/customer behavioral data + scored JSON
+  -> FastAPI data/cache layer
+  -> model inference and explainability
+  -> policy + LLM intervention decision
+  -> REST APIs
+  -> React operator dashboard
 ```
 
----
+## Repository Architecture
 
-## Layer 1: Data & Feature Engineering
-
-### Datasets
-
-| File | Rows | Columns | Description |
-|------|------|---------|-------------|
-| `customers.csv` | 2,000 | 13 | Demographics, financials, product info |
-| `transactions.csv` | ~380,000 | 8 | Raw transaction events (12 months) |
-| `weekly_behavioral_features.csv` | 104,000 | 19 | 12 features × 52 weeks × 2,000 customers |
-| `intervention_log.csv` | ~8,700 | 8 | Historical intervention outcomes |
-
-### Feature Engineering Pipeline
-
-The `pipeline/feature_engineering.py` module computes **12 behavioral signals** from raw transactions with zero data leakage (uses only transactions *before* each week).
-
-**Computation Flow:**
-```
-Per customer, per week:
-  1. Filter transactions to 7-day window
-  2. Compute salary delay (days after expected)
-  3. Compute savings delta (week-over-week %)
-  4. Count ATM withdrawals + lending app txns
-  5. Detect failed auto-debits
-  6. Calculate credit utilization ratio
-  7. Aggregate discretionary + gambling spend
-  8. Compute net cashflow
+```text
+backend/
+  api/                 # FastAPI app, auth, schemas, endpoints
+  agent/               # intervention orchestration, policy, LLM, PII masking
+  config/              # thresholds, model params, llm mode, rules
+  data/                # csv/json/sqlite runtime datasets
+  inference/           # predictor, SHAP, explanation, batch scoring
+  pipeline/            # feature engineering module
+  training/            # train scripts for all model stages
+  tests/               # API/agent/feature/model smoke tests
+  models/              # persisted model artifacts
+frontend/
+  src/
+    api/               # axios API client
+    components/        # dashboard modules + UI widgets
 ```
 
-### Risk Score Formula
+## Backend Runtime Design
 
-The composite risk score is a weighted sum of 10 normalized signal components:
+### FastAPI app (`backend/api/main.py`)
 
-```python
-risk_components = [
-    salary_delay / 20          × 0.15,  # Salary timing
-    abs(savings_delta) / 30    × 0.12,  # Savings erosion
-    atm_count / 8              × 0.08,  # Cash-out behavior
-    lending_count / 5          × 0.12,  # Borrowing pressure
-    failed_autodebit / 2       × 0.15,  # Payment failures
-    utility_delay / 15         × 0.08,  # Bill delays
-    gambling / 2000            × 0.05,  # Gambling exposure
-    credit_utilization         × 0.10,  # Credit stress
-    cashflow_stress            × 0.10,  # Negative cashflow
-    discretionary_drop         × 0.05,  # Spending austerity
-]
-risk_score = clip(sum(components) + noise, 0, 1)
-```
+The API process is the central orchestrator and performs:
 
----
+- Initial data loading from CSV/JSON
+- File mtime snapshotting and refresh (`ensure_data_fresh`)
+- SQLite cache rebuild (`rebuild_sql_cache`) for large-table query speed
+- Lazy loading of model predictor and intervention agent instances
+- CORS middleware setup and auth route handling
 
-## Layer 2: ML Risk Scoring
+Important runtime choices:
 
-### Model 1 — LightGBM (Primary)
+- Transactions are moved to SQLite (`transactions_cache`) for timeline queries
+- In-memory + SQLite hybrid is used for responsiveness
+- The rate limiter class exists, but there is no active middleware hook currently enforcing it globally
 
-**Purpose:** Tabular feature-based risk classification.
+### Data files and cache behavior
 
-| Parameter | Value |
-|-----------|-------|
-| Objective | binary |
-| Metric | AUC |
-| Num Leaves | 63 |
-| Max Depth | 7 |
-| Learning Rate | 0.05 |
-| N Estimators | 1,000 |
-| Class Imbalance | `is_unbalance=True` |
+Main files referenced by API:
 
-**Training:** 5-fold stratified CV with out-of-fold (OOF) prediction storage for ensemble stacking.
+- `customers.csv`
+- `weekly_behavioral_features.csv`
+- `intervention_log.csv`
+- `scored_customers.json`
+- `transactions.csv`
+- `praeventix_cache.db` (materialized query cache)
 
-**Explainability:** SHAP TreeExplainer provides per-feature attribution values for every prediction.
+Cache lifecycle:
 
-### Model 2 — GRU (Temporal)
+- API starts -> loads data -> builds cache
+- File timestamp changes detected -> reload + cache rebuild
 
-**Purpose:** Captures 8-week behavioral degradation sequences.
+## ML Architecture
 
-| Parameter | Value |
-|-----------|-------|
-| Architecture | GRU → Linear(64→32) → Linear(32→1) |
-| Input Shape | (batch, 8, 12) |
-| Dropout | 0.3 |
-| Loss | BCEWithLogitsLoss (pos_weight=4.0) |
-| Optimizer | AdamW (lr=0.001, weight_decay=0.0001) |
-| Epochs | 50 |
+### Inference service (`backend/inference/predict.py`)
 
-**Key Insight:** While LightGBM captures point-in-time risk, the GRU detects *gradual deterioration patterns* — e.g., a customer whose salary delay increases from 2→5→8→12 days over consecutive weeks.
+`RiskPredictor` loads:
 
-### Model 3 — Ensemble Meta-Learner
+- LightGBM model (`lgbm_model.pkl`)
+- GRU model (`gru_model.pt`) and scaler (`gru_scaler.pkl`)
+- Ensemble model (`ensemble_meta.pkl`)
+- Isolation Forest (`isolation_forest.pkl`)
 
-**Purpose:** Learns optimal combination of LightGBM + GRU predictions.
+Prediction modes:
 
-- **Algorithm:** LogisticRegression (C=1.0)
-- **Features:** OOF predictions from LightGBM + GRU + contextual features
-- **Insight:** Automatically learns when to trust which model — GRU dominates for high-risk escalations, LightGBM excels for medium-risk classification.
+- `predict_from_features`: direct API scoring from feature payload
+- `predict_single`: customer-id/week lookup against behavioral dataset
+- `batch_predict`: iterate customer predictions
 
-### Model 4 — Isolation Forest
+Risk classification thresholds come from `backend/config/thresholds.yaml`.
 
-**Purpose:** Anomaly detection for extreme behavioral outliers.
+### Explainability
 
-- **Algorithm:** IsolationForest (n_estimators=200, contamination=5%)
-- **Use Case:** Flags sudden behavioral anomalies (e.g., 10x ATM withdrawals in one week) that models might not capture in standard risk scoring.
-- **Action:** Anomalous + high-risk customers get escalated intervention priority.
+Explainability stack:
 
----
+- SHAP TreeExplainer for LightGBM contributions
+- Confidence estimate via variance across model probabilities
+- Explanation text generation in `inference/ai_explain.py`
+  - Gemini API when `GEMINI_API_KEY` exists
+  - fallback template narrative otherwise
 
-## Layer 3: Agentic Decision Engine
+### Training pipeline
 
-### LangGraph Intervention Agent
+Training scripts (modular):
 
-The `agent/intervention_agent.py` implements a multi-step decision workflow:
+- `train_lightgbm.py`
+- `train_gru.py`
+- `train_ensemble.py`
+- `train_isolation_forest.py`
+- `train_all.py` orchestrator
 
-```
-Input: customer_id, risk_score, SHAP explanations
-        │
-        ▼
-┌─────────────────────┐
-│  Policy Rules Check │  Cooldown periods, intervention limits
-│  (policy_rules.py)  │  Salary-based channel routing
-└────────┬────────────┘
-         │
-         ▼
-┌─────────────────────┐
-│  PII Masking        │  Removes Aadhaar, PAN, phone from LLM input
-│  (pii_masking.py)   │  Regex + validation patterns
-└────────┬────────────┘
-         │
-         ▼
-┌─────────────────────┐
-│  LLM Client         │  Generates empathetic outreach messages
-│  (llm_client.py)    │  Supports: mock / Anthropic / OpenAI
-└────────┬────────────┘
-         │
-         ▼
-┌─────────────────────┐
-│  Compliance Check   │  Scans for aggressive language
-│  (thresholds.yaml)  │  Character limits (SMS: 160, Email: 500)
-└────────┬────────────┘
-         │
-         ▼
-Output: intervention_type, channel, message, compliance_status
-```
+Also present:
 
-### Intervention Types
+- `train_real_data.py` (combined real + synthetic alternative workflow)
+- `generate_scored_customers.py` (offline bulk scoring artifact generation)
 
-| Type | Trigger Condition | Channel |
-|------|------------------|---------|
-| `MONITOR_ONLY` | Risk 0.40–0.55 | — |
-| `SMS_OUTREACH` | Risk 0.55+ | SMS |
-| `FINANCIAL_COUNSELING` | Risk 0.55+ | APP / EMAIL |
-| `RM_CALL` | Risk 0.70+ & Salary ≥ ₹30K | CALL |
-| `RESTRUCTURING_OFFER` | Risk 0.70+ | EMAIL |
-| `PAYMENT_HOLIDAY` | Risk 0.70+ | EMAIL / CALL |
+## Intervention Agent Architecture
 
----
+### Components
 
-## Layer 4: Frontend Dashboard
+- `intervention_agent.py`: orchestrates stateful decision pipeline
+- `policy_rules.py`: deterministic eligibility checks
+- `pii_masking.py`: profile masking and message redaction
+- `llm_client.py`: backend abstraction (`mock`, `anthropic`, `openai`)
 
-### Technology Stack
-- **React 18** with Hooks
-- **Vite** for fast HMR development
-- **Recharts** for data visualization
-- **Axios** for API communication
-- **CSS** with glassmorphic dark theme
+### Decision flow
 
-### 4-Tab Layout
+1. Risk gate (`MONITOR_ONLY` short-circuit below threshold)
+2. Policy eligibility + cooldown checks
+3. LLM decision planner (JSON contract)
+4. Compliance filter:
+   - allowed intervention set
+   - max message length
+   - aggressive-word blocklist
+   - customer-name redaction
+5. Dispatch/log append
 
-| Tab | Components | Key Features |
-|-----|-----------|-------------|
-| Overview | KPI cards, risk distribution, weekly trends | Real-time metrics, animated counters |
-| Live Flagging | Customer risk table, SHAP modal | Sort by risk, click-to-explain |
-| Rules & SHAP | Rule editor, SHAP visualization | Configure thresholds, view feature impact |
-| Outreach | Intervention panel, message preview | Trigger interventions, compliance review |
+Fallback behavior:
 
----
+- On LLM parse/transport failures, rules engine picks intervention.
+- On repeated compliance failure, SMS fallback message is forced.
 
-## API Architecture
+## API Surface (Implemented)
 
-```
-FastAPI App (api/main.py)
-├── Middleware: CORS (allow all origins)
-├── Auth: JWT tokens (python-jose)
-├── Rate Limiting: Custom middleware
-├── Data: Pandas DataFrames loaded at startup
-├── Models: Lazy-loaded on first request
-│
-├── GET  /health                    → HealthResponse
-├── POST /auth/token                → TokenResponse
-├── GET  /api/customers/at-risk     → List[CustomerRiskSummary]
-├── GET  /api/customers/{id}        → CustomerDetailResponse
-├── GET  /api/customers/{id}/history → List[WeeklyRecord]
-├── GET  /api/customers/{id}/explain → SHAP explanation
-├── POST /api/interventions/trigger  → InterventionResponse
-├── GET  /api/interventions/log      → List[InterventionLogEntry]
-└── GET  /api/metrics/overview       → OverviewMetrics
-```
+### Core
 
----
+- `GET /health`
+- `POST /auth/token`
 
-## Risk Thresholds
+### Prediction
 
-```yaml
-risk_thresholds:
-  monitor_only: 0.40        # Flag for monitoring
-  low_intervention: 0.55    # Trigger outreach
-  high_risk: 0.70           # Escalated intervention
-```
+- `POST /api/predict`
+- `POST /api/predict/batch`
+- `GET /api/model-info`
 
----
+### Customer intelligence
 
-## Innovation Highlights
+- `GET /api/customers/at-risk`
+- `GET /api/customers/{customer_id}`
+- `GET /api/customers/{customer_id}/history`
+- `GET /api/customers/{customer_id}/explain`
+- `GET /api/customers/{customer_id}/timeline`
+- `GET /api/customers/{customer_id}/ability-willingness`
 
-1. **Pre-emptive Detection:** 2–4 week advance warning vs. post-default detection
-2. **Multi-Model Ensemble:** Tabular + temporal + anomaly models for robust scoring
-3. **SHAP Explainability:** Every risk score comes with human-readable reasons
-4. **Empathetic Interventions:** LLM-generated messages that help, not threaten
-5. **PII Protection:** Automatic masking before any LLM processing
-6. **Compliance-First:** Auto-scans for aggressive language, enforces character limits
-7. **12 Behavioral Signals:** Deep feature engineering from raw transaction data
+### Intervention + metrics + rules
+
+- `POST /api/interventions/trigger`
+- `POST /api/interventions/record`
+- `GET /api/interventions/log`
+- `GET /api/metrics/overview`
+- `GET /api/metrics/landing`
+- `POST /api/rules/impact`
+- `POST /api/rules/save`
+
+## Frontend Architecture
+
+### App shell (`frontend/src/App.jsx`)
+
+Tabbed dashboard with lazy-loaded modules:
+
+- `Overview`
+- `ModelPredict`
+- `LiveFlagging`
+- `RulesShap`
+- `OutreachPanel`
+
+Landing mode uses:
+
+- `LandingHero`
+- `TextRevealCard`
+- Canvas-based neural animation background
+
+### API integration
+
+`frontend/src/api/client.js` provides Axios wrappers for all backend routes.
+
+Notes:
+
+- Uses static API base `http://localhost:8000`
+- Automatically stores bearer token after `/auth/token`
+- Login defaults to demo creds unless overridden
+
+### UI characteristics
+
+- Monolithic design system in `frontend/src/index.css`
+- Animated KPI cards, tickers, modal workflows
+- PDF export support from prediction and SHAP modules via `html2pdf.js`
+
+## Configuration Architecture
+
+- `config/model_config.yaml`: model hyperparameters + feature lists
+- `config/thresholds.yaml`: risk thresholding, intervention policy, compliance
+- `config/llm_config.yaml`: LLM backend mode and retry controls
+- `config/rules.json`: UI-editable rule set persisted via API
+
+## Deployment Notes
+
+### Local dev topology
+
+- Backend: Uvicorn on `8000`
+- Frontend: Vite configured for `3000`
+- Vite proxies `/api`, `/auth`, `/health` to backend
+
+### Optional BentoML service
+
+`backend/service.py` exposes Bento APIs around `RiskPredictor`, but standard app flow uses FastAPI directly.
+
+## Testing Architecture
+
+Current test suite under `backend/tests` is mostly smoke/contract-level:
+
+- API import/auth/schema checks
+- Feature engineering smoke checks
+- GRU sequence shape/build checks
+- LightGBM config/artifact checks
+- Agent and PII/compliance behavior checks
+
+## Architectural Risks / Technical Debt
+
+- Mixed data lineage assumptions exist (behavioral-banking vs Lending Club style comments in some modules).
+- Demo credentials and permissive CORS are not production-grade defaults.
+- Some runtime behaviors (like global rate limiting) are partially implemented but not fully wired.
+- Frontend and script port defaults are inconsistent (`3000` vs displayed `5173` in launcher messaging).
+
+## Reference Files
+
+- Runtime API: `backend/api/main.py`
+- Inference: `backend/inference/predict.py`
+- Agent flow: `backend/agent/intervention_agent.py`
+- Frontend entry: `frontend/src/App.jsx`

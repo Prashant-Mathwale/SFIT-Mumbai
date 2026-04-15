@@ -1,193 +1,194 @@
-<div align="center">
+# Praeventix - Pre-Delinquency Intervention Engine
 
-# 🛡️ Praeventix — Pre-Delinquency Intervention Engine
+**Team Code Atlantis · Hackathon**
 
-### *AI-Powered Early Warning System for Banking Risk Management*
+Praeventix is an AI-assisted early warning and intervention platform for banking collections teams.  
+It predicts delinquency risk before missed payments, explains risk drivers, and helps trigger compliant outreach.
 
-[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
-[![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org)
-[![LightGBM](https://img.shields.io/badge/LightGBM-02569B?style=for-the-badge&logo=microsoft&logoColor=white)](https://lightgbm.readthedocs.io)
+## What This Repository Contains
 
-> **Team Markoblitz** · Hack-o-Hire 2026
+- `backend`: FastAPI services, ML inference/training, SHAP explainability, intervention agent, configs, tests
+- `frontend`: React + Vite risk operations dashboard (Overview, AI Predict, Live Flagging, Rules/SHAP, Outreach)
+- Root docs and helper scripts (`README.md`, `ARCHITECTURE.md`, `start.ps1`)
 
----
+## Stack
 
-*Detects financial distress **2–4 weeks before** a missed payment and triggers empathetic, personalized interventions — reducing bank NPAs while protecting customers.*
+- Backend: Python, FastAPI, Pandas, NumPy, LightGBM, PyTorch, SHAP, scikit-learn, python-jose
+- Agent layer: Policy rules + PII masking + pluggable LLM client (mock/Anthropic/OpenAI)
+- Frontend: React 18, Vite 5, Axios, Recharts
+- Optional serving: BentoML service (`backend/service.py`)
 
-</div>
+## Quick Start
 
----
+### 1) Prerequisites
 
-## 🚀 Recent UI/UX Enhancements (Hackathon Updates)
+- Python 3.11+ (project can run on newer Python as well)
+- Node.js 18+
+- npm
 
-To deliver a truly completely modern and seamless feeling interface, we heavily overhauled the dashboard UI:
+### 2) Backend setup
 
-1. **Lightweight Canvas 2D Neural Background:** Replaced the heavy, lag-inducing Three.js landing hero with a highly optimized, custom Canvas 2D neural network particle simulation. This ensures **butter-smooth 60FPS animations** without taxing the browser.
-2. **Aceternity UI Text Reveal Card:** Integrated a premium hover-reveal typography component onto the landing page. The card features a hidden message ("We intervene 15 days before.") that smoothly tracks the user's cursor with a cyan spotlight effect.
-3. **Global Responsive Fixes:** Swept the entire React dashboard (`LiveFlagging`, `Overview`, `ModelPredict`) to remove rigidly hardcoded pixel paddings. Replaced them with compliant `max-width: 100%` rules and responsive padding, eliminating horizontal scroll/overflow bugs on smaller laptop displays.
-4. **Cinematic Dark Glassmorphism:** Maintained our high-fidelity, financial surveillance aesthetic (`#0a0a0f` background, indigo/cyan accent typography).
-
----
-
-## 🎯 Problem Statement
-
-Indian banks lose **₹1.5 lakh crore** annually to loan defaults. Traditional systems detect delinquency *after* the damage — missed EMIs, damaged credit scores, legal recovery costs.
-
-**Praeventix** shifts the paradigm from **reactive collection** to **proactive intervention** by identifying distress signals *before* the first missed payment.
-
----
-
-## 🏗️ Architecture
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                      PRAEVENTIX PIPELINE                             │
-├───────────────┬───────────────┬────────────────┬─────────────────────┤
-│   Layer 1     │   Layer 2     │    Layer 3     │      Layer 4        │
-│   Data &      │   ML Risk     │   Agentic      │    Frontend         │
-│   Features    │   Scoring     │   Decisions    │    Dashboard        │
-├───────────────┼───────────────┼────────────────┼─────────────────────┤
-│ 12 Behavioral │ LightGBM      │ LangGraph      │ React + Vite        │
-│ Signals       │ GRU (PyTorch) │ Policy Engine  │ Recharts            │
-│ Feature Eng.  │ Ensemble Meta │ LLM Client     │ 4-Tab Premium UI    │
-│ 104K weekly   │ IsoForest     │ SHAP Explain   │ Dark Glassmorphism  │
-│ records       │ SHAP          │ PII Masking    │ Real-Time Updates   │
-└───────────────┴───────────────┴────────────────┴─────────────────────┘
-                            │
-                      FastAPI REST API
-                    (JWT Auth · Rate Limiting)
-```
-
-> See [ARCHITECTURE.md](ARCHITECTURE.md) for deep technical details.
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-- **Python 3.11+** with pip
-- **Node.js 18+** with npm
-
-### 1️⃣ Clone & Setup
-
-```bash
-git clone https://github.com/Atharv-coder16/SFIT-Mumbai.git
-cd SFIT-Mumbai
-```
-
-### 2️⃣ Generate Data
-
-```bash
+```powershell
 cd backend
-python generate_data.py
-```
-
-### 3️⃣ Install Dependencies & Train Models
-
-```bash
-# Backend
 pip install -r requirements.txt
-python training/train_all.py
-
-# Frontend (in new terminal)
-cd ../frontend
-npm install
 ```
 
-### 4️⃣ Launch
+### 3) Data and model artifacts
 
-```bash
-# Terminal 1 — Backend API
+Use existing provided data/artifacts or regenerate:
+
+```powershell
+# from backend/
+python generate_data.py
+python training/train_all.py
+python generate_scored_customers.py
+```
+
+### 4) Start backend API
+
+```powershell
 cd backend
 uvicorn api.main:app --reload --port 8000
+```
 
-# Terminal 2 — Frontend Dashboard
+### 5) Start frontend
+
+```powershell
 cd frontend
+npm install
 npm run dev
 ```
 
-**Open** → [http://localhost:5173](http://localhost:5173) 🎉
-*(Or depending on Vite config, [http://localhost:3000](http://localhost:3000))*
+Frontend is configured for port `3000` in `frontend/vite.config.js`.
 
-> 💡 **One-click launch (Windows):** Run `.\start.ps1` from the project root.
+### 6) Open app
 
----
+- Dashboard: <http://localhost:3000>
+- API docs: <http://localhost:8000/docs>
+- Health: <http://localhost:8000/health>
 
-## 🧠 ML Models
+### Optional one-click launch (Windows)
 
-| Model | Purpose | Key Features |
-|-------|---------|-------------|
-| **LightGBM** | Tabular risk scoring | 5-fold CV, SHAP-native, handles 80/20 class imbalance |
-| **GRU (PyTorch)** | Temporal degradation patterns | 8-week sliding windows, BCELoss with pos_weight=4.0 |
-| **Ensemble Meta-Learner** | Combines LightGBM + GRU | LogisticRegression on OOF predictions |
-| **Isolation Forest** | Anomaly detection | Flags sudden behavioral outliers (e.g. ATM spikes) |
-| **SHAP Explainer** | Feature attribution | Per-customer human-readable explanations |
+From repo root:
 
----
-
-## 📊 12 Behavioral Signals
-
-| # | Signal | Description |
-|---|--------|-------------|
-| 1 | `salary_delay_days` | Days salary credited after expected date |
-| 2 | `savings_wow_delta_pct` | Week-over-week savings change (%) |
-| 3 | `credit_utilization` | Credit card utilization ratio |
-| 4 | `failed_autodebit_count` | Failed EMI/bill auto-debits |
-| 5 | `lending_upi_count_7d` | UPI lending app transactions (7d) |
-| 6 | `lending_upi_amount_7d` | UPI lending app volume (7d) |
-| 7 | `atm_withdrawal_count_7d` | ATM withdrawals (7d) |
-| 8 | `atm_withdrawal_amount_7d` | ATM withdrawal volume (7d) |
-| 9 | `utility_payment_delay_days` | Days utilities paid after due |
-| 10 | `gambling_spend_7d` | Gambling/lottery spending (7d) |
-| 11 | `discretionary_spend_7d` | Discretionary spending (7d) |
-| 12 | `net_cashflow_7d` | Net cash inflow/outflow (7d) |
-
----
-
-## 🎨 Dashboard & UI Architecture
-
-The premium glassmorphic dashboard has **4 tabs**, alongside the highly optimized Landing Page:
-
-| Section | Description |
-|-----|----------|
-| **Landing Hero** | Custom-built `TextRevealCard` showcasing project foresight, surrounded by a lightweight `Canvas 2D Neural Background`. |
-| **Overview** | KPI cards, risk distribution, intervention stats |
-| **Live Flagging** | Real-time at-risk customer table with SHAP modal |
-| **Rules & SHAP** | Behavioral rule configuration + SHAP explanation viewer |
-| **Outreach** | AI-generated intervention messages with compliance checks |
-
----
-
-## 📁 Project Structure
-
-```
-Praeventix/
-├── frontend/                  # React + Vite Dashboard
-│   ├── src/
-│   │   ├── api/client.js      # API client
-│   │   ├── components/        # LandingHero, TextRevealCard, Overview...
-│   │   ├── App.jsx            # Main app with tab navigation
-│   │   └── index.css          # Premium dark glassmorphic design & global responsive layout
-│   ├── index.html
-│   └── package.json
-│
-├── backend/                   # FastAPI + ML Engine
-│   ├── api/                   # REST API
-│   ├── agent/                 # LangGraph intervention agent
-│   ├── inference/             # ML prediction + SHAP
-│   ├── models/                # Trained model artifacts
-│   └── requirements.txt       
-│
-├── README.md
-└── start.ps1                  # One-click demo launcher
+```powershell
+.\start.ps1
 ```
 
----
+Note: `start.ps1` prints `5173`, but Vite config currently sets `3000`.
 
-<div align="center">
+## Backend API Overview
 
-*Built with ❤️ using LightGBM · PyTorch · FastAPI · LangGraph · SHAP · React · Recharts*
+### Auth/health
 
-</div>
+- `GET /health`
+- `POST /auth/token`
+
+### Prediction APIs
+
+- `POST /api/predict` (single feature payload)
+- `POST /api/predict/batch`
+- `GET /api/model-info`
+
+### Customer risk APIs
+
+- `GET /api/customers/at-risk`
+- `GET /api/customers/{customer_id}`
+- `GET /api/customers/{customer_id}/history`
+- `GET /api/customers/{customer_id}/explain`
+- `GET /api/customers/{customer_id}/timeline`
+- `GET /api/customers/{customer_id}/ability-willingness`
+
+### Intervention and metrics APIs
+
+- `POST /api/interventions/trigger`
+- `POST /api/interventions/record`
+- `GET /api/interventions/log`
+- `GET /api/metrics/overview`
+- `GET /api/metrics/landing`
+- `POST /api/rules/impact`
+- `POST /api/rules/save`
+
+## ML/Scoring Pipeline
+
+- Feature inputs center around weekly behavioral stress signals (salary delay, savings change, credit utilization, failed auto-debits, lending app activity, cashflow, etc.)
+- Models:
+  - LightGBM classifier
+  - GRU temporal model
+  - Logistic ensemble meta-learner
+  - Isolation Forest anomaly detector
+- Explainability:
+  - SHAP feature attributions
+  - Human explanation text (template or Gemini-backed when key is provided)
+
+## Agentic Intervention Layer
+
+`backend/agent/intervention_agent.py` orchestrates:
+
+- Risk gate and policy eligibility checks
+- PII masking before LLM prompts
+- LLM-based intervention selection with rule-based fallback
+- Compliance filtering (length, banned/aggressive terms)
+- Dispatch + intervention log append
+
+LLM mode is controlled by `backend/config/llm_config.yaml` and environment keys.
+
+## Frontend Modules
+
+- `Overview`: KPIs, risk distribution, velocity, portfolio exposure, model status
+- `AI Predict`: manual/preset/CSV prediction, SHAP bars, PDF report export
+- `Live Flagging`: searchable at-risk table, modal drill-down, timeline, explainability
+- `Rules & SHAP`: rule tuning, impact simulation, SHAP explain view, SHAP PDF export
+- `Outreach`: intervention queue, channel/message workflow, dispatch logging
+
+## Repository Structure
+
+```text
+SFIT-Mumbai/
+  backend/
+    api/
+    agent/
+    config/
+    data/
+    inference/
+    models/
+    pipeline/
+    tests/
+    training/
+    requirements.txt
+    service.py
+  frontend/
+    src/
+    package.json
+    vite.config.js
+  ARCHITECTURE.md
+  README.md
+  start.ps1
+```
+
+## Running Tests
+
+From `backend`:
+
+```powershell
+python -m pytest tests
+```
+
+There are targeted test modules for API imports/auth, feature engineering, sequence building, LightGBM config/artifacts, and intervention agent behavior.
+
+## Configuration Notes
+
+- Risk thresholds and compliance controls: `backend/config/thresholds.yaml`
+- Model hyperparameters/features: `backend/config/model_config.yaml`
+- LLM backend mode: `backend/config/llm_config.yaml`
+- Dynamic rule settings: `backend/config/rules.json`
+
+## Known Operational Notes
+
+- Some code paths reference both synthetic behavioral datasets and Lending Club style training conventions; this is intentional in the current hackathon codebase but means naming and comments can look mixed.
+- `backend/data/praeventix_cache.db` is tracked via Git LFS (`.gitattributes`) for API-side query caching.
+- Auth is demo-oriented by default (`admin` / `admin123`) and should be hardened before production use.
+
+## Extended Documentation
+
+See `ARCHITECTURE.md` for detailed architecture, runtime flow, data/model layers, and deployment considerations.
